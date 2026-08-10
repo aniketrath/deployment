@@ -49,8 +49,7 @@ validate:k8s-schemas:
     entrypoint: [""]
   script:
     - echo "==> Validating Kubernetes manifests against official K8s schemas..."
-    - find applications/ namespaces/ infrastructure/ -type f \( -name "*.yaml" -o -name "*.yml" \) ! -name "*values*" -print0 | xargs -0 kubeconform -summary -strict -ignore-missing-schemas
-
+    - 'find applications/ namespaces/ infrastructure/ -type f \( -name "*.yaml" -o -name "*.yml" \) ! -name "*values*" -print0 | xargs -0 /kubeconform -summary -strict -ignore-missing-schemas'
 # ------------------------------------------------------------------------------
 # 3. Dynamic Helm Values Auto-Discovery
 # ------------------------------------------------------------------------------
