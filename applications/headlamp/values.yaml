@@ -1,0 +1,14 @@
+# applications/headlamp/values.yaml
+config:
+  # Base path if hosted behind a subpath (leave empty for root domain)
+  baseURL: ""
+# Default replica count
+replicaCount: 1
+# Resources
+resources:
+  limits:
+    cpu: 200m
+    memory: 256Mi
+  requests:
+    cpu: 50m
+    memory: 128Mi

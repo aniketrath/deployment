@@ -1,12 +1,21 @@
-# Variables
+# ==============================================================================
+# Variables & Configuration
+# ==============================================================================
 -include .env
-KUBECTL ?= kubectl
-NAMESPACES_DIR := namespaces
-TAILSCALE_NAMESPACE ?= infrastructure
-HELM ?= helm
 export
 
-.PHONY: help check-cluster apply-namespaces delete-namespaces status-namespaces helm-repo install-tailscale uninstall-tailscale  deploy-vaultwarden delete-vaultwarden status-vaultwarden
+KUBECTL             ?= kubectl
+HELM                ?= helm
+NAMESPACES_DIR      := namespaces
+TAILSCALE_NAMESPACE ?= infrastructure
+HEADLAMP_NAMESPACE  ?= headlamp
+HEADLAMP_DIR        ?= applications/headlamp
+
+
+# ==============================================================================
+# General & Cluster Targets
+# ==============================================================================
+.PHONY: help check-cluster
 
 help: ## Show available commands
 	@echo "Usage: make [target]"
@@ -19,6 +28,12 @@ check-cluster: ## Verify connection to the Kubernetes cluster
 	@$(KUBECTL) cluster-info > /dev/null 2>&1 || (echo "Error: Cannot connect to cluster. Check your KUBECONFIG." && exit 1)
 	@echo "Connected to cluster: $$(kubectl config current-context)"
 
+
+# ==============================================================================
+# Namespaces
+# ==============================================================================
+.PHONY: apply-namespaces delete-namespaces status-namespaces
+
 apply-namespaces: check-cluster ## Create or update all core namespaces
 	@echo "Applying namespaces..."
 	@$(KUBECTL) apply -f $(NAMESPACES_DIR)/
@@ -30,6 +45,12 @@ delete-namespaces: check-cluster ## Delete all managed namespaces (Caution!)
 status-namespaces: check-cluster ## Check status of managed namespaces
 	@echo "Namespace status:"
 	@$(KUBECTL) get ns infrastructure monitoring applications -o wide --ignore-not-found
+
+
+# ==============================================================================
+# Tailscale Operator
+# ==============================================================================
+.PHONY: helm-repo install-tailscale uninstall-tailscale
 
 helm-repo: ## Add Tailscale Helm repository
 	@echo "Adding Tailscale Helm repository..."
@@ -54,6 +75,12 @@ uninstall-tailscale: check-cluster ## Remove Tailscale Operator
 	@echo "Uninstalling Tailscale Operator..."
 	@$(HELM) uninstall tailscale-operator --namespace $(TAILSCALE_NAMESPACE) --ignore-not-found
 
+
+# ==============================================================================
+# Vaultwarden
+# ==============================================================================
+.PHONY: deploy-vaultwarden delete-vaultwarden status-vaultwarden
+
 deploy-vaultwarden: check-cluster ## Deploy Vaultwarden with PVC and Tailscale Ingress
 	@echo "Deploying Vaultwarden to 'applications' namespace..."
 	@$(KUBECTL) apply -f applications/vaultwarden/
@@ -66,3 +93,39 @@ delete-vaultwarden: check-cluster ## Delete Vaultwarden application
 
 status-vaultwarden: check-cluster ## Check Vaultwarden pods and ingress status
 	@$(KUBECTL) get pods,svc,ingress -n applications -l app.kubernetes.io/name=vaultwarden
+
+
+# ==============================================================================
+# Headlamp Dashboard
+# ==============================================================================
+.PHONY: deploy-headlamp delete-headlamp status-headlamp get-headlamp-token
+
+deploy-headlamp: check-cluster ## Deploy Headlamp dashboard via Helm and apply manifests
+	@echo "Ensuring namespace '$(HEADLAMP_NAMESPACE)' exists..."
+	@$(KUBECTL) create namespace $(HEADLAMP_NAMESPACE) --dry-run=client -o yaml | $(KUBECTL) apply -f -
+	@echo "Adding and updating Headlamp Helm repository..."
+	@$(HELM) repo add headlamp https://kubernetes-sigs.github.io/headlamp/ --force-update
+	@$(HELM) repo update headlamp
+	@echo "Installing/Upgrading Headlamp release..."
+	@$(HELM) upgrade --install headlamp headlamp/headlamp \
+		--namespace $(HEADLAMP_NAMESPACE) \
+		-f $(HEADLAMP_DIR)/values.yaml
+	@echo "Applying Headlamp RBAC and Ingress..."
+	@$(KUBECTL) apply -f $(HEADLAMP_DIR)/rbac.yaml
+	@$(KUBECTL) apply -f $(HEADLAMP_DIR)/ingress.yaml
+	@echo "Headlamp deployment completed successfully."
+
+delete-headlamp: check-cluster ## Delete Headlamp application and namespace
+	@echo "Deleting Headlamp resources..."
+	@$(KUBECTL) delete -f $(HEADLAMP_DIR)/ingress.yaml --ignore-not-found
+	@$(KUBECTL) delete -f $(HEADLAMP_DIR)/rbac.yaml --ignore-not-found
+	@$(HELM) uninstall headlamp -n $(HEADLAMP_NAMESPACE) --ignore-not-found || true
+	@$(KUBECTL) delete namespace $(HEADLAMP_NAMESPACE) --ignore-not-found
+
+status-headlamp: check-cluster ## Check Headlamp pods, service, and ingress status
+	@$(KUBECTL) get pods,svc,ingress -n $(HEADLAMP_NAMESPACE)
+
+get-headlamp-token: check-cluster ## Fetch the admin bearer token for Headlamp login
+	@echo "Headlamp Admin Bearer Token:"
+	@$(KUBECTL) get secret headlamp-admin-token -n $(HEADLAMP_NAMESPACE) -o jsonpath='{.data.token}' | base64 --decode
+	@echo ""
