@@ -6,6 +6,9 @@ stages:
 include:
   - template: Jobs/Secret-Detection.gitlab-ci.yml
 
+variables:
+  SECRET_DETECTION_STAGE: security
+
 .app_change_rules:
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
