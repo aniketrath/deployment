@@ -1,0 +1,91 @@
+stages:
+  - lint
+  - validate
+  - security
+
+include:
+  - template: Jobs/Secret-Detection.gitlab-ci.yml
+
+.app_change_rules:
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - applications/**/*
+        - namespaces/**/*
+        - infrastructure/**/*
+        - Makefile
+        - .gitlab-ci.yml
+        - .yamllint.yml
+        - kind-config.yaml
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+
+# ------------------------------------------------------------------------------
+# 1. Syntax & Makefile Linting
+# ------------------------------------------------------------------------------
+lint:syntax:
+  extends: .app_change_rules
+  stage: lint
+  image: alpine:latest
+  before_script:
+    - apk add --no-cache yamllint make
+  script:
+    - echo "==> Checking YAML syntax..."
+    - yamllint applications/ namespaces/ infrastructure/
+    - echo "==> Dry-running Makefile targets..."
+    - make -n help
+
+# ------------------------------------------------------------------------------
+# 2. Kubernetes Schema Validation
+# ------------------------------------------------------------------------------
+validate:k8s-schemas:
+  extends: .app_change_rules
+  stage: validate
+  image:
+    name: ghcr.io/yannh/kubeconform:v0.6.7-alpine
+    entrypoint: [""]
+  script:
+    - echo "==> Validating Kubernetes manifests against official K8s schemas..."
+    - find applications/ namespaces/ infrastructure/ -type f \( -name "*.yaml" -o -name "*.yml" \) ! -name "*values*" -print0 | xargs -0 kubeconform -summary -strict -ignore-missing-schemas
+    -
+# ------------------------------------------------------------------------------
+# 3. Dynamic Helm Values Auto-Discovery
+# ------------------------------------------------------------------------------
+validate:helm-charts:
+  extends: .app_change_rules
+  stage: validate
+  image:
+    name: alpine/helm:3.14.0
+    entrypoint: [""]
+  script:
+    - echo "==> Auto-discovering and validating Helm applications..."
+    - |
+      helm repo add headlamp https://kubernetes-sigs.github.io/headlamp/ --force-update
+      helm repo update
+
+      for dir in applications/*; do
+        if [ -d "$dir" ] && [ -f "$dir/values.yaml" ]; then
+          app=$(basename "$dir")
+          echo "--> Validating Helm release config for: $app"
+          case "$app" in
+            headlamp)
+              helm template "$app" headlamp/headlamp -f "$dir/values.yaml" > /dev/null
+              ;;
+            *)
+              echo "    (No external chart mapping defined for $app, skipping helm template)"
+              ;;
+          esac
+        fi
+      done
+
+# ------------------------------------------------------------------------------
+# 4. Security & Misconfiguration Scanning
+# ------------------------------------------------------------------------------
+security:trivy-scan:
+  extends: .app_change_rules
+  stage: security
+  image:
+    name: aquasec/trivy:latest
+    entrypoint: [""]
+  script:
+    - echo "==> Scanning manifests for security risks..."
+    - trivy config --severity HIGH,CRITICAL .

@@ -129,3 +129,24 @@ get-headlamp-token: check-cluster ## Fetch the admin bearer token for Headlamp l
 	@echo "Headlamp Admin Bearer Token:"
 	@$(KUBECTL) get secret headlamp-admin-token -n $(HEADLAMP_NAMESPACE) -o jsonpath='{.data.token}' | base64 --decode
 	@echo ""
+
+
+# ==============================================================================
+# Local Testing & Linting (Mirrors GitLab CI)
+# ==============================================================================
+.PHONY: test lint-yaml validate-schemas scan-security
+
+lint-yaml: ## Check YAML syntax locally
+	@echo "==> Running yamllint..."
+	yamllint applications/ namespaces/ infrastructure/
+
+validate-schemas: ## Validate Kubernetes schemas with kubeconform
+	@echo "==> Running kubeconform..."
+	find applications/ namespaces/ infrastructure/ -type f \( -name "*.yaml" -o -name "*.yml" \) ! -name "*values*" -print0 | xargs -0 kubeconform -summary -strict -ignore-missing-schemas
+
+scan-security: ## Scan manifests for security risks with Trivy
+	@echo "==> Running trivy security scan..."
+	trivy config --severity HIGH,CRITICAL .
+
+test: lint-yaml validate-schemas scan-security ## Run all CI checks locally in one command
+	@echo "==> All local checks passed successfully!"

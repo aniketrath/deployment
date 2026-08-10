@@ -1,12 +1,9 @@
-# OS generated files
-.DS_Store
-Thumbs.db
+# Environment & Secrets
+.env
+*.pem
+*.key
 
-# Editor directories
+# IDE & OS files
+.DS_Store
 .idea/
 .vscode/
-
-# Local runtime artifacts
-*.tmp
-*.log
-.env
