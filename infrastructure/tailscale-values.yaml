@@ -1,0 +1,10 @@
+oauth:
+  clientId: ""     # Overridden via Helm command-line flags
+  clientSecret: "" # Overridden via Helm command-line flags
+
+operatorConfig:
+  defaultTags:
+    - "tag:k8s-operator"
+
+# Deploy inside our Phase 1 infrastructure namespace
+installCRDs: true
