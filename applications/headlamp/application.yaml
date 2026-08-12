@@ -8,7 +8,7 @@ spec:
   source:
     chart: headlamp
     repoURL: https://kubernetes-sigs.github.io/headlamp/
-    targetRevision: 0.28.0
+    targetRevision: "*"
     helm:
       valueFiles:
         - values.yaml
