@@ -1,14 +1,22 @@
-# applications/headlamp/values.yaml
 config:
-  # Base path if hosted behind a subpath (leave empty for root domain)
   baseURL: ""
-# Default replica count
+
 replicaCount: 1
-# Resources
-resources:
-  limits:
-    cpu: 200m
-    memory: 256Mi
-  requests:
-    cpu: 50m
-    memory: 128Mi
+
+service:
+  type: ClusterIP
+  port: 80
+
+ingress:
+  enabled: true
+  ingressClassName: tailscale
+  hosts:
+    - host: headlamp
+      paths:
+        - path: /
+          pathType: Prefix
+          type: ImplementationSpecific
+  tls:
+    - secretName: headlamp-tls-cert
+      hosts:
+        - headlamp
