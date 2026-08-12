@@ -29,11 +29,13 @@ check-cluster: ## Verify connection to the Kubernetes cluster
 	@$(KUBECTL) cluster-info > /dev/null 2>&1 || (echo "Error: Cannot connect to cluster. Check your KUBECONFIG." && exit 1)
 	@echo "Connected to cluster: $$(kubectl config current-context)"
 
-run: check-cluster apply-namespaces install-tailscale install-argocd deploy-apps deploy-headlamp ## Full stack setup: Namespaces, Tailscale, Argo CD, apps, and Headlamp
+run: check-cluster apply-namespaces install-tailscale install-argocd ## Full stack setup: Namespaces, Tailscale, Argo CD (apps sync via GitOps/ArgoCD)
 	@echo ""
-
 	@echo "================================================================="
-	@echo "🚀 Full dynamic stack deployment completed successfully!"
+	@echo "🚀 Infrastructure bootstrap completed successfully!"
+	@echo "   Applications are managed by ArgoCD's ApplicationSet from git —"
+	@echo "   no separate app-deploy step needed. Check sync status with:"
+	@echo "   kubectl get applications -n $(ARGOCD_NAMESPACE)"
 	@echo "================================================================="
 
 
@@ -134,7 +136,9 @@ get-argocd-password: check-cluster ## Fetch initial admin password for Argo CD
 
 
 # ==============================================================================
-# Vaultwarden
+# Vaultwarden (manual/local testing only — GitOps via ArgoCD ApplicationSet
+# is the source of truth once ArgoCD is bootstrapped; use these targets for
+# quick local iteration before committing manifest changes to git)
 # ==============================================================================
 .PHONY: deploy-vaultwarden delete-vaultwarden status-vaultwarden
 
@@ -153,7 +157,9 @@ status-vaultwarden: check-cluster ## Check Vaultwarden pods and ingress status
 
 
 # ==============================================================================
-# Headlamp Dashboard
+# Headlamp Dashboard (manual/local testing only — deployed via the standalone
+# ArgoCD Application "headlamp-chart" once ArgoCD is bootstrapped; use these
+# targets only for quick local iteration outside of GitOps)
 # ==============================================================================
 .PHONY: deploy-headlamp delete-headlamp status-headlamp get-headlamp-token
 
@@ -186,7 +192,8 @@ get-headlamp-token: check-cluster ## Fetch the admin bearer token for Headlamp l
 
 
 # ==============================================================================
-# Dynamic Applications
+# Dynamic Applications (manual/local testing only — see note above; ArgoCD's
+# ApplicationSet is the GitOps source of truth for applications/* once bootstrapped)
 # ==============================================================================
 .PHONY: deploy-apps delete-apps
 
