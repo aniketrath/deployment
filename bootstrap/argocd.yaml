@@ -10,6 +10,8 @@ spec:
       revision: main
       directories:
       - path: applications/*
+      - path: applications/headlamp
+        exclude: true
   template:
     metadata:
       name: '{{path.basename}}'
@@ -27,4 +29,4 @@ spec:
           prune: true
           selfHeal: true
         syncOptions:
-        - CreateNamespace=true
+          - CreateNamespace=true
