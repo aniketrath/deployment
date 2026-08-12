@@ -1,5 +1,5 @@
 global:
-  domain: argocd.chimera-fence.ts.net
+  domain: argocd
 
 configs:
   params:
@@ -10,9 +10,15 @@ server:
     enabled: true
     ingressClassName: tailscale
     annotations:
-      tailscale.com/tags: tag:k8s
+      tailscale.com/expose: "true"
     hosts:
-      - argocd.chimera-fence.ts.net
+      - argocd
     tls:
       - hosts:
-          - argocd.chimera-fence.ts.net
+          - argocd
+        secretName: argocd-tls-cert
+    backend:
+      service:
+        name: argocd
+        port:
+          name: http

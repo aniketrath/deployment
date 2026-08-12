@@ -8,7 +8,8 @@ spec:
   ingressClassName: tailscale
   tls:
     - hosts:
-        - infra-dashboard
+        - headlamp
+      secretName: headlamp-tls-cert
   rules:
     - http:
         paths:

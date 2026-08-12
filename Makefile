@@ -31,6 +31,7 @@ check-cluster: ## Verify connection to the Kubernetes cluster
 
 run: check-cluster apply-namespaces install-tailscale install-argocd deploy-apps deploy-headlamp ## Full stack setup: Namespaces, Tailscale, Argo CD, apps, and Headlamp
 	@echo ""
+
 	@echo "================================================================="
 	@echo "🚀 Full dynamic stack deployment completed successfully!"
 	@echo "================================================================="
@@ -83,7 +84,7 @@ install-tailscale: check-cluster helm-repo-tailscale ## Install or upgrade Tails
 
 uninstall-tailscale: check-cluster ## Remove Tailscale Operator
 	@echo "Uninstalling Tailscale Operator..."
-	@$(HELM) uninstall tailscale-operator --namespace $(TAILSCALE_NAMESPACE) --ignore-not-found
+	@$(HELM) uninstall tailscale-operator --namespace $(TAILSCALE_NAMESPACE) --ignore-not-found 2>/dev/null || true
 
 
 # ==============================================================================
@@ -110,14 +111,17 @@ install-argocd: check-cluster ## Install or upgrade Argo CD (Uses local cached c
 			--namespace $(ARGOCD_NAMESPACE) \
 			-f infrastructure/argocd-values.yaml; \
 	fi
-	@echo "Argo CD deployment submitted successfully."
+	@echo "Waiting for Argo CD server to be ready before applying bootstrap..."
+	@$(KUBECTL) rollout status deployment argocd-server -n $(ARGOCD_NAMESPACE) --timeout=120s
+	@echo "Applying root ApplicationSet (deployments)..."
+	@$(KUBECTL) apply -f bootstrap/argocd.yaml
+	@echo "Argo CD deployment and application bootstrap completed successfully."
 
-uninstall-argocd: ## Completely uninstall Argo CD and remove its namespace
+uninstall-argocd: ## Completely uninstall Argo CD and remove its release
 	@echo "Uninstalling Argo CD release..."
-	@$(HELM) uninstall argocd --namespace $(ARGOCD_NAMESPACE) || true
-	@echo "Removing Argo CD namespace..."
-	@kubectl delete namespace $(ARGOCD_NAMESPACE) --timeout=60s || true
-	@echo "Argo CD cleanup complete."
+	-kubectl delete application root-applications -n $(ARGOCD_NAMESPACE) --ignore-not-found=true
+	@$(HELM) uninstall argocd --namespace $(ARGOCD_NAMESPACE) --ignore-not-found || true
+	@echo "Argo CD helm cleanup complete."
 
 status-argocd: check-cluster ## Check Argo CD pods, service, and ingress
 	@$(KUBECTL) get pods,svc,ingress -n $(ARGOCD_NAMESPACE)
@@ -170,7 +174,7 @@ delete-headlamp: check-cluster ## Delete Headlamp application
 	@echo "Deleting Headlamp resources..."
 	@$(KUBECTL) delete -f $(HEADLAMP_DIR)/ingress.yaml --ignore-not-found
 	@$(KUBECTL) delete -f $(HEADLAMP_DIR)/rbac.yaml --ignore-not-found
-	@$(HELM) uninstall headlamp -n $(HEADLAMP_NAMESPACE) --ignore-not-found
+	@$(HELM) uninstall headlamp -n $(HEADLAMP_NAMESPACE) --ignore-not-found 2>/dev/null || true
 
 status-headlamp: check-cluster ## Check Headlamp pods, service, and ingress status
 	@$(KUBECTL) get pods,svc,ingress -n $(HEADLAMP_NAMESPACE)
@@ -228,12 +232,28 @@ scan-security: ## Scan manifests for security risks with Trivy
 test: lint-yaml validate-schemas scan-security ## Run all CI checks locally in one command
 	@echo "==> All local checks passed successfully!"
 
+
 # ==============================================================================
 # Full Cleanup
 # ==============================================================================
 .PHONY: clean
 
-clean: delete-headlamp delete-vaultwarden uninstall-tailscale uninstall-argocd delete-apps delete-namespaces ## Completely wipe out all apps, operators, and namespaces
+clean: check-cluster delete-headlamp delete-vaultwarden uninstall-tailscale uninstall-argocd delete-apps ## Completely wipe out all apps, operators, and namespaces with dynamic finalizer stripping
+	@echo "==> Cleaning up lingering ingress finalizers across all dynamic namespaces..."
+	@for ns in $$(kubectl get namespaces -o jsonpath='{.items[*].metadata.name}' 2>/dev/null); do \
+		if [ "$$ns" != "kube-system" ] && [ "$$ns" != "kube-public" ] && [ "$$ns" != "kube-node-lease" ] && [ "$$ns" != "default" ]; then \
+			for ing in $$(kubectl get ingress -n $$ns -o jsonpath='{.items[*].metadata.name}' 2>/dev/null); do \
+				kubectl patch ingress $$ing -n $$ns --type=json -p='[{"op": "remove", "path": "/metadata/finalizers"}]' 2>/dev/null || true; \
+			done; \
+			kubectl get namespace $$ns -o json 2>/dev/null | tr -d '\n' | sed 's/"finalizers":\[[^]]*\]/"finalizers":\[\]/' | kubectl replace --raw /api/v1/namespaces/$$ns/finalize -f - 2>/dev/null || true; \
+		fi; \
+	done
+	@echo "==> Deleting all custom namespaces..."
+	@for ns in $$(kubectl get namespaces -o jsonpath='{.items[*].metadata.name}' 2>/dev/null); do \
+		if [ "$$ns" != "kube-system" ] && [ "$$ns" != "kube-public" ] && [ "$$ns" != "kube-node-lease" ] && [ "$$ns" != "default" ]; then \
+			kubectl delete namespace $$ns --ignore-not-found=true --timeout=5s 2>/dev/null || true; \
+		fi; \
+	done
 	@echo ""
 	@echo "================================================================="
 	@echo "🧹 Full cluster cleanup completed successfully!"

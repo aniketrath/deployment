@@ -5,6 +5,4 @@ oauth:
 operatorConfig:
   defaultTags:
     - "tag:k8s-operator"
-
-# Deploy inside our Phase 1 infrastructure namespace
 installCRDs: true
