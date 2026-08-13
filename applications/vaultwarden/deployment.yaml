@@ -33,10 +33,12 @@ spec:
               drop:
                 - ALL
           env:
+            - name: DOMAIN
+              value: "https://vault.chimera-fence.ts.net"
             - name: WEBSOCKET_ENABLED
               value: "true"
             - name: SIGNUPS_ALLOWED
-              value: "true"
+              value: "false"
             - name: DATA_FOLDER
               value: "/data"
           ports:
