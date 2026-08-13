@@ -7,10 +7,11 @@ spec:
   ingressClassName: tailscale
   tls:
     - hosts:
-        - vault
+        - vault.chimera-fence.ts.net
       secretName: vault-tls-cert
   rules:
-    - http:
+    - host: vault.chimera-fence.ts.net
+      http:
         paths:
           - path: /
             pathType: Prefix

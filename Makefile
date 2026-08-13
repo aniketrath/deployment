@@ -29,12 +29,12 @@ check-cluster: ## Verify connection to the Kubernetes cluster
 	@$(KUBECTL) cluster-info > /dev/null 2>&1 || (echo "Error: Cannot connect to cluster. Check your KUBECONFIG." && exit 1)
 	@echo "Connected to cluster: $$(kubectl config current-context)"
 
-run: check-cluster apply-namespaces install-tailscale install-argocd ## Full stack setup: Namespaces, Tailscale, Argo CD (apps sync via GitOps/ArgoCD)
+run: check-cluster apply-namespaces install-tailscale install-argocd deploy-headlamp ## Full stack setup: Namespaces, Tailscale, Argo CD (Vaultwarden/GitOps apps sync via ApplicationSet), and Headlamp
 	@echo ""
 	@echo "================================================================="
-	@echo "🚀 Infrastructure bootstrap completed successfully!"
-	@echo "   Applications are managed by ArgoCD's ApplicationSet from git —"
-	@echo "   no separate app-deploy step needed. Check sync status with:"
+	@echo "🚀 Full stack deployment completed successfully!"
+	@echo "   GitOps-managed apps (e.g. Vaultwarden) sync automatically via"
+	@echo "   ArgoCD's ApplicationSet. Check status with:"
 	@echo "   kubectl get applications -n $(ARGOCD_NAMESPACE)"
 	@echo "================================================================="
 
