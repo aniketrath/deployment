@@ -11,12 +11,18 @@ TAILSCALE_NAMESPACE ?= infrastructure
 HEADLAMP_NAMESPACE  ?= infrastructure
 HEADLAMP_DIR        ?= applications/headlamp
 ARGOCD_NAMESPACE    ?= argocd
+POSTGRES_NAMESPACE  ?= infrastructure
+POSTGRES_DIR        ?= applications/postgres
+REDIS_NAMESPACE     ?= infrastructure
+REDIS_DIR           ?= applications/redis
+INFISICAL_NAMESPACE ?= applications
+INFISICAL_DIR       ?= applications/infisical
 
 
 # ==============================================================================
 # General & Cluster Targets
 # ==============================================================================
-.PHONY: help check-cluster run
+.PHONY: help check-cluster run test-local
 
 help: ## Show available commands
 	@echo "Usage: make [target]"
@@ -29,13 +35,24 @@ check-cluster: ## Verify connection to the Kubernetes cluster
 	@$(KUBECTL) cluster-info > /dev/null 2>&1 || (echo "Error: Cannot connect to cluster. Check your KUBECONFIG." && exit 1)
 	@echo "Connected to cluster: $$(kubectl config current-context)"
 
-run: check-cluster apply-namespaces install-tailscale install-argocd deploy-headlamp ## Full stack setup: Namespaces, Tailscale, Argo CD (Vaultwarden/GitOps apps sync via ApplicationSet), and Headlamp
+run: check-cluster apply-namespaces install-tailscale deploy-postgres install-argocd init-infisical-db secret-infisical deploy-headlamp ## Full stack setup: Namespaces, Tailscale, Postgres, Argo CD (Vaultwarden/GitOps apps sync via ApplicationSet), and Headlamp
 	@echo ""
 	@echo "================================================================="
 	@echo "🚀 Full stack deployment completed successfully!"
-	@echo "   GitOps-managed apps (e.g. Vaultwarden) sync automatically via"
-	@echo "   ArgoCD's ApplicationSet. Check status with:"
+	@echo "   GitOps-managed apps (e.g. Vaultwarden, Redis, Infisical)"
+	@echo "   sync automatically via ArgoCD's ApplicationSet once committed"
+	@echo "   to main. Check status with:"
 	@echo "   kubectl get applications -n $(ARGOCD_NAMESPACE)"
+	@echo "================================================================="
+
+test-local: check-cluster apply-namespaces deploy-postgres deploy-redis init-infisical-db secret-infisical deploy-infisical ## Local-only: deploy Postgres, Redis, and Infisical directly (bypasses ArgoCD/GitOps entirely, for testing uncommitted manifests)
+	@echo ""
+	@echo "================================================================="
+	@echo "🧪 Local test stack (Postgres, Redis, Infisical) deployed!"
+	@echo "   These were applied directly, NOT via ArgoCD/GitOps — commit"
+	@echo "   applications/redis/ and applications/infisical/ to main when"
+	@echo "   ready to hand them off to the ApplicationSet."
+	@echo "   Check status with: make status-postgres status-redis status-infisical"
 	@echo "================================================================="
 
 
@@ -157,12 +174,151 @@ status-vaultwarden: check-cluster ## Check Vaultwarden pods and ingress status
 
 
 # ==============================================================================
+# Postgres (manual/local deploy — foundational dependency for Infisical;
+# deployed directly via Makefile rather than GitOps, so it's guaranteed to
+# exist before init-infisical-db and Infisical's ArgoCD sync need it)
+# ==============================================================================
+.PHONY: deploy-postgres delete-postgres status-postgres
+
+deploy-postgres: check-cluster secret-postgres ## Deploy Postgres (Deployment/Service/PVC) directly, ahead of ArgoCD
+	@echo "Deploying Postgres to '$(POSTGRES_NAMESPACE)' namespace..."
+	@$(KUBECTL) apply -f $(POSTGRES_DIR)/ -n $(POSTGRES_NAMESPACE)
+	@echo "Waiting for postgres pod to become Ready..."
+	@$(KUBECTL) wait --for=condition=ready pod -l app=postgres -n $(POSTGRES_NAMESPACE) --timeout=120s
+	@echo "Postgres deployed and ready."
+
+delete-postgres: check-cluster ## Delete the manually-deployed Postgres application
+	@echo "Deleting Postgres resources..."
+	@$(KUBECTL) delete -f $(POSTGRES_DIR)/ -n $(POSTGRES_NAMESPACE) --ignore-not-found
+
+status-postgres: check-cluster ## Check Postgres pod, service, and PVC status
+	@$(KUBECTL) get pods,svc,pvc -n $(POSTGRES_NAMESPACE) -l app=postgres
+
+
+# ==============================================================================
+# Redis (manual/local-testing deploy only — backing service for Infisical;
+# NOT wired into `run`, use `make test-local` or `make deploy-redis` directly.
+# TODO: migrate to GitOps once applications/redis/ is committed to main)
+# ==============================================================================
+.PHONY: deploy-redis delete-redis status-redis
+
+deploy-redis: check-cluster ## Deploy Redis (Deployment/Service) directly, for local testing
+	@echo "Deploying Redis to '$(REDIS_NAMESPACE)' namespace..."
+	@$(KUBECTL) apply -f $(REDIS_DIR)/ -n $(REDIS_NAMESPACE)
+	@echo "Waiting for redis pod to become Ready..."
+	@$(KUBECTL) wait --for=condition=ready pod -l app=redis -n $(REDIS_NAMESPACE) --timeout=120s
+	@echo "Redis deployed and ready."
+
+delete-redis: check-cluster ## Delete the manually-deployed Redis application
+	@echo "Deleting Redis resources..."
+	@$(KUBECTL) delete -f $(REDIS_DIR)/ -n $(REDIS_NAMESPACE) --ignore-not-found
+
+status-redis: check-cluster ## Check Redis pod and service status
+	@$(KUBECTL) get pods,svc -n $(REDIS_NAMESPACE) -l app=redis
+
+
+# ==============================================================================
+# Postgres Database Bootstrap (Infisical DB/user/schema — idempotent)
+# ==============================================================================
+.PHONY: init-infisical-db
+
+init-infisical-db: check-cluster ## Create Infisical's DB, user, and schema grants on Postgres (idempotent)
+	@if [ -z "$(INFISICAL_DB_NAME)" ] || [ -z "$(INFISICAL_DB_USER)" ] || [ -z "$(INFISICAL_DB_PASSWORD)" ]; then \
+		echo "Error: INFISICAL_DB_NAME, INFISICAL_DB_USER, INFISICAL_DB_PASSWORD must be set in .env"; \
+		exit 1; \
+	fi
+	@echo "Ensuring Infisical database and user exist..."
+	@rm -f /tmp/infisical-role.sql
+	@printf '%s\n' \
+		"DO \$$\$$" \
+		"BEGIN" \
+		"  IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = '$(INFISICAL_DB_USER)') THEN" \
+		"    CREATE ROLE $(INFISICAL_DB_USER) WITH LOGIN PASSWORD '$(INFISICAL_DB_PASSWORD)';" \
+		"  ELSE" \
+		"    ALTER ROLE $(INFISICAL_DB_USER) WITH PASSWORD '$(INFISICAL_DB_PASSWORD)';" \
+		"  END IF;" \
+		"END" \
+		"\$$\$$;" \
+		> /tmp/infisical-role.sql
+	@$(KUBECTL) exec -i deploy/postgres -n $(POSTGRES_NAMESPACE) -- psql -U postgres -v ON_ERROR_STOP=1 < /tmp/infisical-role.sql
+	@rm -f /tmp/infisical-role.sql
+	@$(KUBECTL) exec -i deploy/postgres -n $(POSTGRES_NAMESPACE) -- psql -U postgres -v ON_ERROR_STOP=1 -tc \
+		"SELECT 1 FROM pg_database WHERE datname = '$(INFISICAL_DB_NAME)'" | grep -q 1 || \
+		$(KUBECTL) exec -i deploy/postgres -n $(POSTGRES_NAMESPACE) -- psql -U postgres -v ON_ERROR_STOP=1 -c \
+		"CREATE DATABASE $(INFISICAL_DB_NAME) OWNER $(INFISICAL_DB_USER)"
+	@echo "Granting schema privileges..."
+	@$(KUBECTL) exec -i deploy/postgres -n $(POSTGRES_NAMESPACE) -- psql -U postgres -v ON_ERROR_STOP=1 -d $(INFISICAL_DB_NAME) -c \
+		"GRANT ALL ON SCHEMA public TO $(INFISICAL_DB_USER); GRANT CREATE ON SCHEMA public TO $(INFISICAL_DB_USER);"
+	@echo "Infisical database bootstrap complete."
+
+
+# ==============================================================================
+# Bootstrap Secrets (Postgres, Infisical)
+# These are the fixed set of secrets that must exist in-cluster before their
+# respective apps can start — created directly from root .env, never committed
+# to git. Every app deployed AFTER Infisical is live should use an
+# InfisicalSecret CR instead of a target here; this section should not grow.
+# ==============================================================================
+.PHONY: secret-postgres secret-infisical
+
+secret-postgres: check-cluster ## Create/update the postgres-secrets Secret from .env
+	@if [ -z "$(POSTGRES_USER)" ] || [ -z "$(POSTGRES_PASSWORD)" ] || [ -z "$(POSTGRES_DB)" ]; then \
+		echo "Error: POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB must be set in .env"; \
+		exit 1; \
+	fi
+	@echo "Applying postgres-secrets in namespace '$(POSTGRES_NAMESPACE)'..."
+	@$(KUBECTL) create secret generic postgres-secrets \
+		-n $(POSTGRES_NAMESPACE) \
+		--from-literal=POSTGRES_USER="$(POSTGRES_USER)" \
+		--from-literal=POSTGRES_PASSWORD="$(POSTGRES_PASSWORD)" \
+		--from-literal=POSTGRES_DB="$(POSTGRES_DB)" \
+		--dry-run=client -o yaml | $(KUBECTL) apply -f -
+	@echo "postgres-secrets applied."
+
+secret-infisical: check-cluster ## Create/update the infisical-secrets Secret from .env
+	@if [ -z "$(INFISICAL_DB_CONNECTION_URI)" ] || [ -z "$(INFISICAL_REDIS_URL)" ] || [ -z "$(INFISICAL_AUTH_SECRET)" ] || [ -z "$(INFISICAL_ENCRYPTION_KEY)" ]; then \
+		echo "Error: INFISICAL_DB_CONNECTION_URI, INFISICAL_REDIS_URL, INFISICAL_AUTH_SECRET, INFISICAL_ENCRYPTION_KEY must be set in .env"; \
+		exit 1; \
+	fi
+	@echo "Applying infisical-secrets in namespace '$(INFISICAL_NAMESPACE)'..."
+	@$(KUBECTL) create secret generic infisical-secrets \
+		-n $(INFISICAL_NAMESPACE) \
+		--from-literal=DB_CONNECTION_URI="$(INFISICAL_DB_CONNECTION_URI)" \
+		--from-literal=REDIS_URL="$(INFISICAL_REDIS_URL)" \
+		--from-literal=AUTH_SECRET="$(INFISICAL_AUTH_SECRET)" \
+		--from-literal=ENCRYPTION_KEY="$(INFISICAL_ENCRYPTION_KEY)" \
+		$(if $(INFISICAL_SITE_URL),--from-literal=SITE_URL="$(INFISICAL_SITE_URL)") \
+		--dry-run=client -o yaml | $(KUBECTL) apply -f -
+	@echo "infisical-secrets applied."
+
+
+# ==============================================================================
+# Infisical (manual/local-testing deploy only — depends on postgres, redis,
+# and infisical-secrets all being present first. NOT wired into `run`, use
+# `make test-local` or `make deploy-infisical` directly.
+# TODO: migrate to GitOps once applications/infisical/ is committed to main)
+# ==============================================================================
+.PHONY: deploy-infisical delete-infisical status-infisical
+
+deploy-infisical: check-cluster deploy-postgres deploy-redis init-infisical-db secret-infisical ## Deploy Infisical directly, after its DB/Redis/secrets are ready
+	@echo "Deploying Infisical to '$(INFISICAL_NAMESPACE)' namespace..."
+	@$(KUBECTL) apply -f $(INFISICAL_DIR)/ -n $(INFISICAL_NAMESPACE)
+	@echo "Infisical deployed."
+
+delete-infisical: check-cluster ## Delete the manually-deployed Infisical application
+	@echo "Deleting Infisical resources..."
+	@$(KUBECTL) delete -f $(INFISICAL_DIR)/ -n $(INFISICAL_NAMESPACE) --ignore-not-found
+
+status-infisical: check-cluster ## Check Infisical pods, service, and ingress status
+	@$(KUBECTL) get pods,svc,ingress -n $(INFISICAL_NAMESPACE) -l app=infisical
+
+
+# ==============================================================================
 # Headlamp Dashboard (manual/local testing only — deployed via the standalone
 # ArgoCD Application "headlamp-chart" once ArgoCD is bootstrapped; use these
 # targets only for quick local iteration outside of GitOps)
-# Also the location where we can dump the secrets generation for all other apps
 # ==============================================================================
-.PHONY: secret-infisical deploy-headlamp delete-headlamp status-headlamp get-headlamp-token
+.PHONY: deploy-headlamp delete-headlamp status-headlamp get-headlamp-token
 
 deploy-headlamp: check-cluster ## Deploy Headlamp dashboard via Helm and apply manifests
 	@echo "Adding and updating Headlamp Helm repository..."
@@ -243,7 +399,7 @@ test: lint-yaml validate-schemas scan-security ## Run all CI checks locally in o
 # ==============================================================================
 # Full Cleanup
 # ==============================================================================
-.PHONY: clean
+.PHONY: clean clean-local
 
 clean: check-cluster delete-headlamp delete-vaultwarden uninstall-tailscale uninstall-argocd delete-apps ## Completely wipe out all apps, operators, and namespaces with dynamic finalizer stripping
 	@echo "==> Cleaning up lingering ingress finalizers across all dynamic namespaces..."
@@ -264,4 +420,10 @@ clean: check-cluster delete-headlamp delete-vaultwarden uninstall-tailscale unin
 	@echo ""
 	@echo "================================================================="
 	@echo "🧹 Full cluster cleanup completed successfully!"
+	@echo "================================================================="
+
+clean-local: check-cluster delete-infisical delete-redis delete-postgres ## Tear down only the test-local stack (Postgres, Redis, Infisical)
+	@echo ""
+	@echo "================================================================="
+	@echo "🧹 Local test stack (Postgres, Redis, Infisical) cleaned up."
 	@echo "================================================================="
