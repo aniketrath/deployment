@@ -7,10 +7,10 @@ spec:
   ingressClassName: tailscale
   tls:
     - hosts:
-        - infisical
+        - infisical.chimera-fence.ts.net
       secretName: infisical-tls-cert
   rules:
-    - host: infisical
+    - host: infisical.chimera-fence.ts.net
       http:
         paths:
           - path: /
