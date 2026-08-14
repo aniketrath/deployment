@@ -160,8 +160,9 @@ status-vaultwarden: check-cluster ## Check Vaultwarden pods and ingress status
 # Headlamp Dashboard (manual/local testing only — deployed via the standalone
 # ArgoCD Application "headlamp-chart" once ArgoCD is bootstrapped; use these
 # targets only for quick local iteration outside of GitOps)
+# Also the location where we can dump the secrets generation for all other apps
 # ==============================================================================
-.PHONY: deploy-headlamp delete-headlamp status-headlamp get-headlamp-token
+.PHONY: secret-infisical deploy-headlamp delete-headlamp status-headlamp get-headlamp-token
 
 deploy-headlamp: check-cluster ## Deploy Headlamp dashboard via Helm and apply manifests
 	@echo "Adding and updating Headlamp Helm repository..."
@@ -189,7 +190,6 @@ get-headlamp-token: check-cluster ## Fetch the admin bearer token for Headlamp l
 	@echo "Headlamp Admin Bearer Token:"
 	@$(KUBECTL) get secret headlamp-admin-token -n $(HEADLAMP_NAMESPACE) -o jsonpath='{.data.token}' | base64 --decode
 	@echo ""
-
 
 # ==============================================================================
 # Dynamic Applications (manual/local testing only — see note above; ArgoCD's
