@@ -1,19 +1,19 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: vaultwarden
+  name: infisical
   namespace: applications
   labels:
-    app: vaultwarden
+    app: infisical
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: vaultwarden
+      app: infisical
   template:
     metadata:
       labels:
-        app: vaultwarden
+        app: infisical
     spec:
       securityContext:
         runAsNonRoot: true
@@ -23,8 +23,8 @@ spec:
         seccompProfile:
           type: RuntimeDefault
       containers:
-        - name: vaultwarden
-          image: vaultwarden/server:1.33.2-alpine
+        - name: infisical
+          image: infisical/infisical:latest-postgres
           imagePullPolicy: IfNotPresent
           securityContext:
             allowPrivilegeEscalation: false
@@ -32,26 +32,22 @@ spec:
             capabilities:
               drop:
                 - ALL
+          envFrom:
+            - secretRef:
+                name: infisical-secrets
           env:
-            - name: WEBSOCKET_ENABLED
-              value: "true"
-            - name: SIGNUPS_ALLOWED
-              value: "false"
-            - name: DATA_FOLDER
-              value: "/data"
+            - name: SITE_URL
+              value: "https://infisical.perch-humboldt.ts.net"
           ports:
             - name: http
-              containerPort: 80
-            - name: websocket
-              containerPort: 3012
+              containerPort: 8080
           volumeMounts:
-            - name: vaultwarden-data
-              mountPath: /data
             - name: tmp
               mountPath: /tmp
+            - name: ssl-certs
+              mountPath: /etc/ssl/certs
       volumes:
-        - name: vaultwarden-data
-          persistentVolumeClaim:
-            claimName: vaultwarden-pvc
         - name: tmp
+          emptyDir: {}
+        - name: ssl-certs
           emptyDir: {}

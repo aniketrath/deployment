@@ -1,0 +1,22 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: infisical
+  namespace: applications
+spec:
+  ingressClassName: tailscale
+  tls:
+    - hosts:
+        - infisical
+      secretName: infisical-tls-cert
+  rules:
+    - host: infisical
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: infisical
+                port:
+                  name: http
