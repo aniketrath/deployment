@@ -1,0 +1,53 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: infisical
+  namespace: applications
+  labels:
+    app: infisical
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: infisical
+  template:
+    metadata:
+      labels:
+        app: infisical
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: infisical
+          image: infisical/infisical:latest-postgres
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          envFrom:
+            - secretRef:
+                name: infisical-secrets
+          env:
+            - name: SITE_URL
+              value: "https://infisical.chimera-fence.ts.net"
+          ports:
+            - name: http
+              containerPort: 8080
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            - name: ssl-certs
+              mountPath: /etc/ssl/certs
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        - name: ssl-certs
+          emptyDir: {}
