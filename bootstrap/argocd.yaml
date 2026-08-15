@@ -7,7 +7,7 @@ spec:
   generators:
   - git:
       repoURL: https://gitlab.com/stackcraft/deployment.git
-      revision: main
+      revision: version/v2
       directories:
       - path: applications/*
       - path: applications/headlamp
@@ -19,7 +19,7 @@ spec:
       project: default
       source:
         repoURL: https://gitlab.com/stackcraft/deployment.git
-        targetRevision: main
+        targetRevision: version/v2
         path: '{{path}}'
       destination:
         server: https://kubernetes.default.svc
