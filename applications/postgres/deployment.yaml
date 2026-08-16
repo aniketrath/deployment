@@ -5,8 +5,6 @@ metadata:
   namespace: infrastructure
   labels:
     app: postgres
-  annotations:
-    argocd.argoproj.io/sync-wave: "-1"
 spec:
   replicas: 1
   strategy:
@@ -32,13 +30,13 @@ spec:
           imagePullPolicy: IfNotPresent
           securityContext:
             allowPrivilegeEscalation: false
-            readOnlyRootFilesystem: false
+            readOnlyRootFilesystem: true
             capabilities:
               drop:
                 - ALL
           envFrom:
             - secretRef:
-                name: clustercreds-postgres
+                name: postgres-secrets
           env:
             - name: PGDATA
               value: /var/lib/postgresql/data/pgdata
@@ -48,6 +46,8 @@ spec:
           volumeMounts:
             - name: postgres-data
               mountPath: /var/lib/postgresql/data
+            - name: postgres-home
+              mountPath: /var/lib/postgresql
             - name: tmp
               mountPath: /tmp
             - name: run
@@ -56,6 +56,8 @@ spec:
         - name: postgres-data
           persistentVolumeClaim:
             claimName: postgres-pvc
+        - name: postgres-home
+          emptyDir: {}
         - name: tmp
           emptyDir: {}
         - name: run

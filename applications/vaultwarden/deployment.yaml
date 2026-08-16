@@ -5,7 +5,7 @@ metadata:
   namespace: applications
   labels:
     app: vaultwarden
-    annotations:
+  annotations:
     argocd.argoproj.io/sync-wave: "1"
 spec:
   replicas: 1

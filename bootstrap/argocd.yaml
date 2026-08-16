@@ -10,8 +10,6 @@ spec:
       revision: version/v2
       directories:
       - path: applications/*
-      - path: applications/headlamp
-        exclude: true
   template:
     metadata:
       name: '{{path.basename}}'
