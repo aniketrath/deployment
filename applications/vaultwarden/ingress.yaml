@@ -3,14 +3,16 @@ kind: Ingress
 metadata:
   name: vaultwarden
   namespace: applications
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
 spec:
   ingressClassName: tailscale
   tls:
     - hosts:
-        - vault.chimera-fence.ts.net
+        - vault.perch-humboldt.ts.net
       secretName: vault-tls-cert
   rules:
-    - host: vault.chimera-fence.ts.net
+    - host: vault.perch-humboldt.ts.net
       http:
         paths:
           - path: /

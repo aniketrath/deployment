@@ -41,7 +41,7 @@ spec:
                 name: clustercreds-infisical
           env:
             - name: SITE_URL
-              value: "https://infisical.chimera-fence.ts.net"
+              value: "https://infisical.perch-humboldt.ts.net"
             - name: PORT
               value: "80"
             - name: DB_CONNECTION_URI
