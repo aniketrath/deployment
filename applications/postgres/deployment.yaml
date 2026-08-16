@@ -48,6 +48,8 @@ spec:
               mountPath: /var/lib/postgresql/data
             - name: postgres-home
               mountPath: /var/lib/postgresql
+            - name: postgres-etc
+              mountPath: /etc/postgresql
             - name: tmp
               mountPath: /tmp
             - name: run
@@ -57,6 +59,8 @@ spec:
           persistentVolumeClaim:
             claimName: postgres-pvc
         - name: postgres-home
+          emptyDir: {}
+        - name: postgres-etc
           emptyDir: {}
         - name: tmp
           emptyDir: {}
