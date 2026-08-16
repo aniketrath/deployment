@@ -3,12 +3,12 @@ config:
   baseURL: ""
   # Enable automatic plugin reload when the plugin config changes
   watchPlugins: true
-
-# Default replica count
+serviceAccount:
+  create: false
+  name: headlamp-admin
 replicaCount: 1
 annotations:
   argocd.argoproj.io/sync-wave: "1"
-# Resources
 resources:
   limits:
     cpu: 200m

@@ -1,12 +1,10 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: headlamp
+  name: infra-headlamp
   namespace: argocd
   finalizers:
     - resources-finalizer.argocd.argoproj.io
-  annotations:
-    argocd.argoproj.io/sync-wave: "1"
 spec:
   project: default
   sources:
@@ -14,16 +12,12 @@ spec:
       chart: headlamp
       targetRevision: 0.44.0
       helm:
+        releaseName: headlamp
         valueFiles:
           - $values/applications/headlamp/values.yaml
     - repoURL: https://gitlab.com/stackcraft/deployment.git
-      targetRevision: main
+      targetRevision: version/v2
       ref: values
-    - repoURL: https://gitlab.com/stackcraft/deployment.git
-      targetRevision: main
-      path: applications/headlamp
-      directory:
-        include: "{rbac.yaml,ingress.yaml}"
   destination:
     server: https://kubernetes.default.svc
     namespace: infrastructure
