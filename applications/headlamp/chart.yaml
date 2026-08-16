@@ -1,9 +1,0 @@
-apiVersion: v2
-name: headlamp
-description: Local umbrella chart wrapping the upstream Headlamp chart plus RBAC/Ingress
-type: application
-version: 0.1.0
-dependencies:
-  - name: headlamp
-    version: 0.44.0
-    repository: https://kubernetes-sigs.github.io/headlamp/
