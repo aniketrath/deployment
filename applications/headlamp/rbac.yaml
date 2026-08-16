@@ -4,11 +4,15 @@ kind: ServiceAccount
 metadata:
   name: headlamp-admin
   namespace: infrastructure
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
   name: headlamp-admin-binding
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
 subjects:
   - kind: ServiceAccount
     name: headlamp-admin
@@ -24,5 +28,6 @@ metadata:
   name: headlamp-admin-token
   namespace: infrastructure
   annotations:
+    argocd.argoproj.io/sync-wave: "1"
     kubernetes.io/service-account.name: headlamp-admin
 type: kubernetes.io/service-account-token
