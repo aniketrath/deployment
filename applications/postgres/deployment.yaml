@@ -5,6 +5,8 @@ metadata:
   namespace: infrastructure
   labels:
     app: postgres
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
 spec:
   replicas: 1
   strategy:
@@ -26,17 +28,17 @@ spec:
           type: RuntimeDefault
       containers:
         - name: postgres
-          image: postgres:16-alpine
+          image: ghcr.io/immich-app/postgres:16-vectorchord1.1.1-pgvector0.8.5
           imagePullPolicy: IfNotPresent
           securityContext:
             allowPrivilegeEscalation: false
-            readOnlyRootFilesystem: true
+            readOnlyRootFilesystem: false
             capabilities:
               drop:
                 - ALL
           envFrom:
             - secretRef:
-                name: postgres-secrets
+                name: clustercreds-postgres
           env:
             - name: PGDATA
               value: /var/lib/postgresql/data/pgdata
