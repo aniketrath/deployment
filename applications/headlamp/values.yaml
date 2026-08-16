@@ -1,39 +1,43 @@
-config:
-  # Base path if hosted behind a subpath (leave empty for root domain)
-  baseURL: ""
-  # Enable automatic plugin reload when the plugin config changes
-  watchPlugins: true
+# Values are nested under the dependency's chart name, since headlamp is now
+# a subchart of this local umbrella chart.
+headlamp:
+  config:
+    # Base path if hosted behind a subpath (leave empty for root domain)
+    baseURL: ""
+    # Enable automatic plugin reload when the plugin config changes
+    watchPlugins: true
 
-# Default replica count
-replicaCount: 1
-annotations:
-  argocd.argoproj.io/sync-wave: "1"
-# Resources
-resources:
-  limits:
-    cpu: 200m
-    memory: 256Mi
-  requests:
-    cpu: 50m
-    memory: 128Mi
-pluginsManager:
-  enabled: true
-  baseImage: node:lts-alpine
-  version: latest
-  configContent: |
-    plugins:
-      - name: cert-manager
-        source: https://artifacthub.io/packages/headlamp/headlamp-plugins/headlamp_cert-manager
-        version: 0.1.0
-      - name: kubescape
-        source: https://artifacthub.io/packages/headlamp/kubescape-headlamp-plugin/headlamp_kubescape
-        version: 0.11.2
-      - name: kube-vip
-        source: https://artifacthub.io/packages/headlamp/headlamp-kube-vip/headlamp-kube-vip
-        version: 1.0.2
-      - name: metallb
-        source: https://artifacthub.io/packages/headlamp/headlamp-metallb-plugin/headlamp-metallb-plugin
-        version: 0.5.1
-    installOptions:
-      parallel: true
-      maxConcurrent: 2
+  # Default replica count
+  replicaCount: 1
+
+  # Resources
+  resources:
+    limits:
+      cpu: 200m
+      memory: 256Mi
+    requests:
+      cpu: 50m
+      memory: 128Mi
+
+  # Declarative in-cluster plugin installation.
+  pluginsManager:
+    enabled: true
+    baseImage: node:lts-alpine
+    version: latest
+    configContent: |
+      plugins:
+        - name: cert-manager
+          source: https://artifacthub.io/packages/headlamp/headlamp-plugins/headlamp_cert-manager
+          version: 0.1.0
+        - name: kubescape
+          source: https://artifacthub.io/packages/headlamp/kubescape-headlamp-plugin/headlamp_kubescape
+          version: 0.11.2
+        - name: kube-vip
+          source: https://artifacthub.io/packages/headlamp/headlamp-kube-vip/headlamp-kube-vip
+          version: 1.0.2
+        - name: metallb
+          source: https://artifacthub.io/packages/headlamp/headlamp-metallb-plugin/headlamp-metallb-plugin
+          version: 0.5.1
+      installOptions:
+        parallel: true
+        maxConcurrent: 2

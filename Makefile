@@ -158,7 +158,7 @@ lint-yaml: ## Check YAML syntax locally
 
 validate-schemas: ## Validate Kubernetes schemas with kubeconform
 	@echo "==> Running kubeconform..."
-	find applications/ namespaces/ infrastructure/ -type f \( -name "*.yaml" -o -name "*.yml" \) ! -name "*values*" -print0 | xargs -0 kubeconform -summary -strict -ignore-missing-schemas
+	find applications/ namespaces/ infrastructure/ -type f \( -name "*.yaml" -o -name "*.yml" \) ! -name "*values*" ! -iname "Chart.yaml" -print0 | xargs -0 kubeconform -summary -strict -ignore-missing-schemas
 
 scan-security: ## Scan manifests for security risks with Trivy
 	@echo "==> Running trivy security scan..."
