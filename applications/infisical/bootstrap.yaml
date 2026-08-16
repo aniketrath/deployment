@@ -1,0 +1,80 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: infisical-db-init
+  namespace: infrastructure
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+spec:
+  template:
+    metadata:
+      name: infisical-db-init
+    spec:
+      restartPolicy: OnFailure
+      containers:
+      - name: psql-bootstrap
+        image: postgres:15-alpine
+        env:
+        - name: PGUSER
+          valueFrom:
+            secretKeyRef:
+              name: clustercreds-postgres
+              key: POSTGRES_USER
+        - name: PGPASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: clustercreds-postgres
+              key: POSTGRES_PASSWORD
+        - name: PGHOST
+          value: postgres
+        - name: INFISICAL_DB_NAME
+          value: "infisical"
+        - name: INFISICAL_DB_USER
+          valueFrom:
+            secretKeyRef:
+              name: clustercreds-postgres
+              key: POSTGRES_USER
+        - name: INFISICAL_DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: clustercreds-postgres
+              key: POSTGRES_PASSWORD
+              
+        command:
+        - "sh"
+        - "-c"
+        - |
+          set -e
+          echo "Ensuring Infisical database and user exist..."
+          
+          # 1. Create or alter user role idempotently
+          psql -v ON_ERROR_STOP=1 <<-EOF
+            DO \$\$
+            BEGIN
+              IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = '$INFISICAL_DB_USER') THEN
+                CREATE ROLE "$INFISICAL_DB_USER" WITH LOGIN PASSWORD '$INFISICAL_DB_PASSWORD';
+              ELSE
+                ALTER ROLE "$INFISICAL_DB_USER" WITH PASSWORD '$INFISICAL_DB_PASSWORD';
+              END IF;
+            END
+            \$\$;
+          EOF
+
+          # 2. Create database if it doesn't already exist
+          DB_EXISTS=$(psql -v ON_ERROR_STOP=1 -tc "SELECT 1 FROM pg_database WHERE datname = '$INFISICAL_DB_NAME'" | tr -d '[:space:]')
+          if [ "$DB_EXISTS" != "1" ]; then
+            echo "Creating database $INFISICAL_DB_NAME..."
+            psql -v ON_ERROR_STOP=1 -c "CREATE DATABASE \"$INFISICAL_DB_NAME\" OWNER \"$INFISICAL_DB_USER\""
+          else
+            echo "Database $INFISICAL_DB_NAME already exists."
+          fi
+
+          # 3. Grant schema privileges
+          echo "Granting schema privileges..."
+          psql -v ON_ERROR_STOP=1 -d "$INFISICAL_DB_NAME" <<-EOF
+            GRANT ALL ON SCHEMA public TO "$INFISICAL_DB_USER";
+            GRANT CREATE ON SCHEMA public TO "$INFISICAL_DB_USER";
+          EOF
+          echo "Infisical database bootstrap complete."
