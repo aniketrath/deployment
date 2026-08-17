@@ -96,7 +96,7 @@ install-argocd: check-cluster
 	@echo "Waiting for Argo CD server to be ready before applying bootstrap..."
 	@$(KUBECTL) rollout status deployment argocd-server -n $(ARGOCD_NAMESPACE) --timeout=120s
 	@echo "Applying root ApplicationSet (deployments)..."
-	@$(KUBECTL) apply -f bootstrap/argocd.yaml
+	@$(KUBECTL) apply -f bootstrap/argocd_production.yaml
 	@echo "Argo CD deployment and application bootstrap completed successfully."
 
 uninstall-argocd:

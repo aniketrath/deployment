@@ -41,6 +41,8 @@ spec:
               value: "false"
             - name: DATA_FOLDER
               value: "/data"
+            - name: DOMAIN
+              value: "https://vault.perch-humboldt.ts.net"
           ports:
             - name: http
               containerPort: 80
