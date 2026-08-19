@@ -5,11 +5,11 @@ metadata:
   namespace: argocd
 spec:
   generators:
-  - git:
-      repoURL: https://gitlab.com/stackcraft/deployment.git
-      revision: version/v2
-      directories:
-      - path: applications/*
+    - git:
+        repoURL: https://gitlab.com/stackcraft/deployment.git
+        revision: version/v2
+        directories:
+          - path: deployments/*/*
   template:
     metadata:
       name: '{{path.basename}}'
@@ -19,8 +19,10 @@ spec:
         repoURL: https://gitlab.com/stackcraft/deployment.git
         targetRevision: version/v2
         path: '{{path}}'
+        directory: {}
       destination:
         server: https://kubernetes.default.svc
+        namespace: '{{path[1]}}'
       syncPolicy:
         automated:
           prune: true

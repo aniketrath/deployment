@@ -2,8 +2,10 @@
 # .env & Variables
 #######################################################################
 ARGOCD_NAMESPACE   ?= argocd
+ARGOCD_ENV         ?= production
 HEADLAMP_NAMESPACE ?= infrastructure
 NAMESPACES_DIR     ?= namespaces
+DEPLOYMENTS_DIR    ?= deployments
 HELM               ?= helm
 KUBECTL            ?= kubectl
 
@@ -25,7 +27,7 @@ help:
 	@echo "  clean-wave-infra      - Manually remove Wave -1 infrastructure"
 	@echo "  creds-argocd          - Retrieve initial Argo CD admin password"
 	@echo "  creds-headlamp        - Retrieve Headlamp admin bearer token"
-	@echo "  deploy-argocd-stack   - Install Argo CD stack and apply the root ApplicationSet"
+	@echo "  deploy-argocd-stack   - Install Argo CD stack and apply the root ApplicationSet (ARGOCD_ENV=production|staging)"
 	@echo "  deploy-namespaces     - Create or update all core namespaces"
 	@echo "  deploy-wave-infra     - Manually apply Wave -1 infrastructure (Postgres, Redis)"
 	@echo "  install-argocd        - Install/upgrade Argo CD only"
@@ -45,7 +47,7 @@ check-cluster:
 .PHONY: status-namespaces deploy-namespaces clean-namespaces
 
 status-namespaces: check-cluster ## Check status of managed namespaces
-	@$(KUBECTL) get ns infrastructure monitoring applications argocd -o wide --ignore-not-found
+	@$(KUBECTL) get ns infrastructure applications tailscale argocd -o wide --ignore-not-found
 
 deploy-namespaces: check-cluster ## Create or update all core namespaces
 	@echo "===> Applying namespaces..."
@@ -86,17 +88,17 @@ install-argocd: check-cluster
 		echo "Using local chart tarball charts/argo-cd-10.3.2.tgz..."; \
 		$(HELM) upgrade --install argocd charts/argo-cd-10.3.2.tgz \
 			--namespace $(ARGOCD_NAMESPACE) \
-			-f infrastructure/argocd-values.yaml; \
+			-f bootstrap/argocd/values.yaml; \
 	else \
 		echo "Local chart not found, fetching from remote repo..."; \
 		$(HELM) upgrade --install argocd argo/argo-cd \
 			--namespace $(ARGOCD_NAMESPACE) \
-			-f infrastructure/argocd-values.yaml; \
+			-f bootstrap/argocd/values.yaml; \
 	fi
 	@echo "Waiting for Argo CD server to be ready before applying bootstrap..."
 	@$(KUBECTL) rollout status deployment argocd-server -n $(ARGOCD_NAMESPACE) --timeout=120s
-	@echo "Applying root ApplicationSet (deployments)..."
-	@$(KUBECTL) apply -f bootstrap/argocd_production.yaml
+	@echo "Applying root ApplicationSet (env: $(ARGOCD_ENV))..."
+	@$(KUBECTL) apply -f bootstrap/argocd/$(ARGOCD_ENV)/argocd.yaml
 	@echo "Argo CD deployment and application bootstrap completed successfully."
 
 uninstall-argocd:
@@ -122,18 +124,18 @@ creds-argocd: check-cluster
 
 deploy-wave-infra: check-cluster
 	@echo "===> Deploying Wave -1: Postgres and Redis manifests manually..."
-	@$(KUBECTL) apply -f applications/postgres/
-	@$(KUBECTL) apply -f applications/redis/
+	@$(KUBECTL) apply -f $(DEPLOYMENTS_DIR)/infrastructure/postgres/
+	@$(KUBECTL) apply -f $(DEPLOYMENTS_DIR)/infrastructure/redis/
 	@echo "===> Wave -1 infrastructure deployed successfully!"
 
 clean-wave-infra: check-cluster
 	@echo "===> Removing Wave -1: Postgres and Redis manifests manually..."
-	@$(KUBECTL) delete -f applications/redis/ --ignore-not-found
-	@$(KUBECTL) delete -f applications/postgres/ --ignore-not-found
+	@$(KUBECTL) delete -f $(DEPLOYMENTS_DIR)/infrastructure/redis/ --ignore-not-found
+	@$(KUBECTL) delete -f $(DEPLOYMENTS_DIR)/infrastructure/postgres/ --ignore-not-found
 	@echo "===> Wave -1 infrastructure removed."
 
 # ==============================================================================
-# Headlamp Dashboard (deployed via ArgoCD Application — see applications/headlamp/)
+# Headlamp Dashboard (deployed via ArgoCD Application — see deployments/infrastructure/headlamp/)
 # Install/delete are owned by Argo's sync loop; these targets are for local
 # inspection only.
 # ==============================================================================
@@ -154,11 +156,11 @@ creds-headlamp: check-cluster
 
 lint-yaml: ## Check YAML syntax locally
 	@echo "==> Running yamllint..."
-	yamllint applications/ namespaces/ infrastructure/
+	yamllint $(DEPLOYMENTS_DIR)/ $(NAMESPACES_DIR)/ bootstrap/
 
 validate-schemas: ## Validate Kubernetes schemas with kubeconform
 	@echo "==> Running kubeconform..."
-	find applications/ namespaces/ infrastructure/ -type f \( -name "*.yaml" -o -name "*.yml" \) ! -name "*values*" ! -iname "Chart.yaml" -print0 | xargs -0 kubeconform -summary -strict -ignore-missing-schemas
+	find $(DEPLOYMENTS_DIR)/ $(NAMESPACES_DIR)/ -type f \( -name "*.yaml" -o -name "*.yml" \) ! -name "*values*" ! -iname "Chart.yaml" -print0 | xargs -0 kubeconform -summary -strict -ignore-missing-schemas
 
 scan-security: ## Scan manifests for security risks with Trivy
 	@echo "==> Running trivy security scan..."

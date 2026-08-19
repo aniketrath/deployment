@@ -1,0 +1,41 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - bootstrap.yaml
+  - deployment.yaml
+  - ingress.yaml
+  - service.yaml
+
+patches:
+  - target:
+      kind: Ingress
+      name: infisical
+    patch: |-
+      apiVersion: networking.k8s.io/v1
+      kind: Ingress
+      metadata:
+        name: infisical
+      spec:
+        rules:
+          - host: infisical.chimera-fence.ts.net
+        tls:
+          - hosts:
+              - infisical.chimera-fence.ts.net
+
+  - target:
+      kind: Deployment
+      name: infisical
+    patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: infisical
+      spec:
+        template:
+          spec:
+            containers:
+              - name: infisical
+                env:
+                  - name: SITE_URL
+                    value: "https://infisical.chimera-fence.ts.net"
