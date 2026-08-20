@@ -80,7 +80,7 @@ add-helm-repos:
 # ==============================================================================
 .PHONY: deploy-argocd-stack install-argocd uninstall-argocd status-argocd creds-argocd
 
-deploy-argocd-stack: add-helm-repos install-argocd status-argocd creds-argocd
+deploy-argocd-stack: setup-prerequisites deploy-namespaces add-helm-repos install-argocd status-argocd creds-argocd
 
 install-argocd: check-cluster
 	@echo "Installing/Upgrading Argo CD in namespace '$(ARGOCD_NAMESPACE)'..."
