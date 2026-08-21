@@ -12,30 +12,17 @@ patches:
       kind: Ingress
       name: vaultwarden
     patch: |-
-      apiVersion: networking.k8s.io/v1
-      kind: Ingress
-      metadata:
-        name: vaultwarden
-      spec:
-        rules:
-          - host: vault.chimera-fence.ts.net
-        tls:
-          - hosts:
-              - vault.chimera-fence.ts.net
+      - op: replace
+        path: /spec/rules/0/host
+        value: vault.chimera-fence.ts.net
+      - op: replace
+        path: /spec/tls/0/hosts/0
+        value: vault.chimera-fence.ts.net
 
   - target:
       kind: Deployment
       name: vaultwarden
     patch: |-
-      apiVersion: apps/v1
-      kind: Deployment
-      metadata:
-        name: vaultwarden
-      spec:
-        template:
-          spec:
-            containers:
-              - name: vaultwarden
-                env:
-                  - name: DOMAIN
-                    value: "https://vault.chimera-fence.ts.net"
+      - op: replace
+        path: /spec/template/spec/containers/0/env/3/value
+        value: "https://vault.chimera-fence.ts.net"
