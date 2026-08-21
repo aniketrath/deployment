@@ -14,12 +14,11 @@ variables:
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       changes:
-        - applications/**/*
+        - deployments/**/*
         - namespaces/**/*
-        - infrastructure/**/*
+        - bootstrap/**/*
         - Makefile
         - .gitlab-ci.yml
-        - .yamllint.yml
         - kind-config.yaml
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
 
@@ -34,7 +33,7 @@ lint:syntax:
     - apk add --no-cache yamllint make
   script:
     - echo "==> Checking YAML syntax..."
-    - yamllint applications/ namespaces/ infrastructure/
+    - yamllint deployments/ namespaces/ bootstrap/
     - echo "==> Dry-running Makefile targets..."
     - make -n help
 
@@ -49,7 +48,8 @@ validate:k8s-schemas:
     entrypoint: [""]
   script:
     - echo "==> Validating Kubernetes manifests against official K8s schemas..."
-    - 'find applications/ namespaces/ infrastructure/ -type f \( -name "*.yaml" -o -name "*.yml" \) ! -name "*values*" -print0 | xargs -0 /kubeconform -summary -strict -ignore-missing-schemas'
+    - 'find deployments/ namespaces/ -type f \( -name "*.yaml" -o -name "*.yml" \) ! -name "*values*" -print0 | xargs -0 /kubeconform -summary -strict -ignore-missing-schemas'
+
 # ------------------------------------------------------------------------------
 # 3. Dynamic Helm Values Auto-Discovery
 # ------------------------------------------------------------------------------
@@ -65,7 +65,7 @@ validate:helm-charts:
       helm repo add headlamp https://kubernetes-sigs.github.io/headlamp/ --force-update
       helm repo update
 
-      for dir in applications/*; do
+      for dir in deployments/applications/*; do
         if [ -d "$dir" ] && [ -f "$dir/values.yaml" ]; then
           app=$(basename "$dir")
           echo "--> Validating Helm release config for: $app"

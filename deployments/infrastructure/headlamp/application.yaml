@@ -1,0 +1,31 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: infra-headlamp
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  sources:
+    - repoURL: https://kubernetes-sigs.github.io/headlamp/
+      chart: headlamp
+      targetRevision: 0.44.0
+      helm:
+        releaseName: headlamp
+        valueFiles:
+          - $values/applications/headlamp/values.yaml
+    - repoURL: https://gitlab.com/stackcraft/deployment.git
+      targetRevision: version/v2
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: infrastructure
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

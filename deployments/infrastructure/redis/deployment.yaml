@@ -1,30 +1,34 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: vaultwarden
-  namespace: applications
+  name: redis
+  namespace: infrastructure
   labels:
-    app: vaultwarden
+    app: redis
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
 spec:
   replicas: 1
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
-      app: vaultwarden
+      app: redis
   template:
     metadata:
       labels:
-        app: vaultwarden
+        app: redis
     spec:
       securityContext:
         runAsNonRoot: true
-        runAsUser: 1000
-        runAsGroup: 1000
-        fsGroup: 1000
+        runAsUser: 999
+        runAsGroup: 999
+        fsGroup: 999
         seccompProfile:
           type: RuntimeDefault
       containers:
-        - name: vaultwarden
-          image: vaultwarden/server:1.33.2-alpine
+        - name: redis
+          image: redis:7-alpine
           imagePullPolicy: IfNotPresent
           securityContext:
             allowPrivilegeEscalation: false
@@ -32,26 +36,18 @@ spec:
             capabilities:
               drop:
                 - ALL
-          env:
-            - name: WEBSOCKET_ENABLED
-              value: "true"
-            - name: SIGNUPS_ALLOWED
-              value: "false"
-            - name: DATA_FOLDER
-              value: "/data"
+          args: ["--appendonly", "yes"]
           ports:
-            - name: http
-              containerPort: 80
-            - name: websocket
-              containerPort: 3012
+            - name: redis
+              containerPort: 6379
           volumeMounts:
-            - name: vaultwarden-data
+            - name: redis-data
               mountPath: /data
             - name: tmp
               mountPath: /tmp
       volumes:
-        - name: vaultwarden-data
+        - name: redis-data
           persistentVolumeClaim:
-            claimName: vaultwarden-pvc
+            claimName: redis-pvc
         - name: tmp
           emptyDir: {}

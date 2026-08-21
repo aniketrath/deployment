@@ -3,8 +3,8 @@ kind: Deployment
 metadata:
   name: postgres
   namespace: infrastructure
-  labels:
-    app: postgres
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
 spec:
   replicas: 1
   strategy:
@@ -26,7 +26,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: postgres
-          image: postgres:16-alpine
+          image: ghcr.io/immich-app/postgres:16-vectorchord1.1.1-pgvector0.8.5
           imagePullPolicy: IfNotPresent
           securityContext:
             allowPrivilegeEscalation: false
@@ -36,7 +36,7 @@ spec:
                 - ALL
           envFrom:
             - secretRef:
-                name: postgres-secrets
+                name: clustercreds-postgres
           env:
             - name: PGDATA
               value: /var/lib/postgresql/data/pgdata
@@ -46,6 +46,10 @@ spec:
           volumeMounts:
             - name: postgres-data
               mountPath: /var/lib/postgresql/data
+            - name: postgres-home
+              mountPath: /var/lib/postgresql
+            - name: postgres-etc
+              mountPath: /etc/postgresql
             - name: tmp
               mountPath: /tmp
             - name: run
@@ -54,6 +58,10 @@ spec:
         - name: postgres-data
           persistentVolumeClaim:
             claimName: postgres-pvc
+        - name: postgres-home
+          emptyDir: {}
+        - name: postgres-etc
+          emptyDir: {}
         - name: tmp
           emptyDir: {}
         - name: run

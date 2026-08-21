@@ -1,16 +1,19 @@
-# applications/headlamp/ingress.yaml
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: headlamp-ingress
   namespace: infrastructure
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
 spec:
   ingressClassName: tailscale
   tls:
     - hosts:
-        - headlamp
+        - headlamp.perch-humboldt.ts.net
+      secretName: headlamp-tls-cert
   rules:
-    - http:
+    - host: headlamp.perch-humboldt.ts.net
+      http:
         paths:
           - path: /
             pathType: Prefix

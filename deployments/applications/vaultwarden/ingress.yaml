@@ -1,22 +1,24 @@
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: infisical
+  name: vaultwarden
   namespace: applications
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
 spec:
   ingressClassName: tailscale
   tls:
     - hosts:
-        - infisical.chimera-fence.ts.net
-      secretName: infisical-tls-cert
+        - vault.perch-humboldt.ts.net
+      secretName: vault-tls-cert
   rules:
-    - host: infisical.chimera-fence.ts.net
+    - host: vault.perch-humboldt.ts.net
       http:
         paths:
           - path: /
             pathType: Prefix
             backend:
               service:
-                name: infisical
+                name: vaultwarden
                 port:
                   name: http
