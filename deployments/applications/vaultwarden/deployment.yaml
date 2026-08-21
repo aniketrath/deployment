@@ -38,7 +38,7 @@ spec:
             - name: WEBSOCKET_ENABLED
               value: "true"
             - name: SIGNUPS_ALLOWED
-              value: "false"
+              value: "true"
             - name: DATA_FOLDER
               value: "/data"
             - name: DOMAIN
@@ -59,3 +59,4 @@ spec:
             claimName: vaultwarden-pvc
         - name: tmp
           emptyDir: {}
+
