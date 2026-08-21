@@ -18,7 +18,6 @@ patches:
       - op: replace
         path: /spec/tls/0/hosts/0
         value: infisical.chimera-fence.ts.net
-
   - target:
       kind: Deployment
       name: infisical

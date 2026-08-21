@@ -59,4 +59,3 @@ spec:
             claimName: vaultwarden-pvc
         - name: tmp
           emptyDir: {}
-
