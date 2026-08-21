@@ -10,6 +10,7 @@ spec:
         revision: main
         directories:
           - path: deployments/*/*
+          - path: deployments/tailscale
   template:
     metadata:
       name: '{{path.basename}}'
