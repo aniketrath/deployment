@@ -4,7 +4,7 @@ metadata:
   name: infisical-db-init
   namespace: infrastructure
   annotations:
-    argocd.argoproj.io/sync-wave: "1"
+    argocd.argoproj.io/sync-wave: "0"
     argocd.argoproj.io/hook: Sync
     argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
 spec:
@@ -40,7 +40,7 @@ spec:
                   name: clustercreds-postgres
                   key: POSTGRES_PASSWORD
             - name: PGHOST
-              value: postgres
+              value: postgres.infrastructure.svc.cluster.local
             - name: INFISICAL_DB_NAME
               value: "infisical"
             - name: INFISICAL_DB_USER
@@ -59,7 +59,6 @@ spec:
             - |
               set -e
               echo "Ensuring Infisical database and user exist..."
-              # 1. Create or alter user role idempotently
               psql -v ON_ERROR_STOP=1 <<-EOF
                 DO \$\$
                 BEGIN
@@ -71,7 +70,6 @@ spec:
                 END
                 \$\$;
               EOF
-              # 2. Create database if it doesn't already exist
               DB_EXISTS=$(psql -v ON_ERROR_STOP=1 -tc "SELECT 1 FROM pg_database WHERE datname = '$INFISICAL_DB_NAME'" | tr -d '[:space:]')
               if [ "$DB_EXISTS" != "1" ]; then
                 echo "Creating database $INFISICAL_DB_NAME..."
@@ -79,8 +77,6 @@ spec:
               else
                 echo "Database $INFISICAL_DB_NAME already exists."
               fi
-              # 3. Grant schema privileges
-              echo "Granting schema privileges..."
               psql -v ON_ERROR_STOP=1 -d "$INFISICAL_DB_NAME" <<-EOF
                 GRANT ALL ON SCHEMA public TO "$INFISICAL_DB_USER";
                 GRANT CREATE ON SCHEMA public TO "$INFISICAL_DB_USER";
