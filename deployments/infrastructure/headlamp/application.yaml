@@ -16,9 +16,9 @@ spec:
       helm:
         releaseName: headlamp
         valueFiles:
-          - $values/applications/headlamp/values.yaml
+          - $values/deployments/infrastructure/headlamp/values.yaml
     - repoURL: https://gitlab.com/stackcraft/deployment.git
-      targetRevision: version/v2
+      targetRevision: main
       ref: values
   destination:
     server: https://kubernetes.default.svc
