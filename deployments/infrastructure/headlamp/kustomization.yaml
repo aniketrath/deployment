@@ -12,7 +12,7 @@ patches:
     patch: |-
       - op: replace
         path: /spec/rules/0/host
-        value: headlamp.perch-humboldt.ts.net
+        value: headlamp.chimera-fence.ts.net
       - op: replace
         path: /spec/tls/0/hosts/0
-        value: headlamp.perch-humboldt.ts.net
+        value: headlamp.chimera-fence.ts.net
