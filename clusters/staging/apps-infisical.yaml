@@ -16,7 +16,7 @@ spec:
     name: flux-system
   targetNamespace: applications
   wait: true
-  timeout: 3m
+  timeout: 10m
   healthChecks:
     - apiVersion: apps/v1
       kind: Deployment

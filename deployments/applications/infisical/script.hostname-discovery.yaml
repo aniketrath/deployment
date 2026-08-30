@@ -9,7 +9,7 @@ data:
     set -eu
     TOKEN="$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)"
     API="https://kubernetes.default.svc"
-    MAX_RETRIES=30
+    MAX_RETRIES=180
     SLEEP_SECONDS=2
     i=0
     while [ "$i" -lt "$MAX_RETRIES" ]; do
