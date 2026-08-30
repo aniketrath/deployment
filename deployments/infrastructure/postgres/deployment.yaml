@@ -3,8 +3,6 @@ kind: Deployment
 metadata:
   name: postgres
   namespace: infrastructure
-  annotations:
-    argocd.argoproj.io/sync-wave: "0"
 spec:
   replicas: 1
   strategy:

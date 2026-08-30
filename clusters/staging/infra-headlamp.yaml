@@ -1,0 +1,17 @@
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: infra-headlamp
+  namespace: flux-system
+spec:
+  dependsOn:
+    - name: apps-infisical
+    - name: tailscale-operator
+  interval: 10m
+  path: ./deployments/infrastructure/headlamp
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  wait: true
+  timeout: 5m

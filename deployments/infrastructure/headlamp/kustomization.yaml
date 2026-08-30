@@ -4,15 +4,11 @@ kind: Kustomization
 resources:
   - ingress.yaml
   - rbac.yaml
+  - helmrepository.yaml
+  - helmrelease.yaml
 
-patches:
-  - target:
-      kind: Ingress
-      name: headlamp-ingress
-    patch: |-
-      - op: replace
-        path: /spec/rules/0/host
-        value: headlamp.chimera-fence.ts.net
-      - op: replace
-        path: /spec/tls/0/hosts/0
-        value: headlamp.chimera-fence.ts.net
+configMapGenerator:
+  - name: headlamp-values
+    namespace: flux-system
+    files:
+      - values.yaml

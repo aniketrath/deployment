@@ -5,8 +5,6 @@ metadata:
   namespace: applications
   labels:
     app: infisical
-  annotations:
-    argocd.argoproj.io/sync-wave: "1"
 spec:
   replicas: 1
   selector:
@@ -17,6 +15,7 @@ spec:
       labels:
         app: infisical
     spec:
+      serviceAccountName: infisical-sa
       securityContext:
         runAsNonRoot: true
         runAsUser: 1000
@@ -24,10 +23,30 @@ spec:
         fsGroup: 1000
         seccompProfile:
           type: RuntimeDefault
+      initContainers:
+        - name: hostname-discovery
+          image: curlimages/curl:latest
+          command: ["/bin/sh", "/scripts/discover.sh"]
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: shared
+              mountPath: /shared
+            - name: discovery-script
+              mountPath: /scripts
       containers:
         - name: infisical
           image: infisical/infisical:latest-postgres
           imagePullPolicy: IfNotPresent
+          command: ["sh", "-c"]
+          args:
+            - |
+              export SITE_URL="https://$(cat /shared/domain)"
+              exec docker-entrypoint.sh ./standalone-entrypoint.sh
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
@@ -40,8 +59,6 @@ spec:
             - secretRef:
                 name: clustercreds-infisical
           env:
-            - name: SITE_URL
-              value: "https://infisical.perch-humboldt.ts.net"
             - name: PORT
               value: "80"
             - name: DB_CONNECTION_URI
@@ -62,8 +79,16 @@ spec:
               mountPath: /tmp
             - name: ssl-certs
               mountPath: /etc/ssl/certs
+            - name: shared
+              mountPath: /shared
       volumes:
         - name: tmp
           emptyDir: {}
         - name: ssl-certs
           emptyDir: {}
+        - name: shared
+          emptyDir: {}
+        - name: discovery-script
+          configMap:
+            name: infisical-hostname-discovery
+            defaultMode: 0555

@@ -3,17 +3,14 @@ kind: Ingress
 metadata:
   name: headlamp-ingress
   namespace: infrastructure
-  annotations:
-    argocd.argoproj.io/sync-wave: "2"
 spec:
   ingressClassName: tailscale
   tls:
     - hosts:
-        - headlamp.perch-humboldt.ts.net
+        - headlamp
       secretName: headlamp-tls-cert
   rules:
-    - host: headlamp.perch-humboldt.ts.net
-      http:
+    - http:
         paths:
           - path: /
             pathType: Prefix

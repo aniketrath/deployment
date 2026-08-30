@@ -1,0 +1,27 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: infisical-hostname-discovery
+  namespace: applications
+data:
+  discover.sh: |
+    #!/bin/sh
+    set -eu
+    TOKEN="$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)"
+    API="https://kubernetes.default.svc"
+    MAX_RETRIES=30
+    SLEEP_SECONDS=2
+    i=0
+    while [ "$i" -lt "$MAX_RETRIES" ]; do
+      RESPONSE="$(curl -s -k -H "Authorization: Bearer ${TOKEN}" "${API}/apis/networking.k8s.io/v1/namespaces/applications/ingresses/infisical")"
+      HOSTNAME="$(echo "$RESPONSE" | grep -o '"hostname":"[^"]*"' | head -n1 | cut -d'"' -f4)"
+      if [ -n "$HOSTNAME" ]; then
+        echo "$HOSTNAME" > /shared/domain
+        echo "Resolved hostname: $HOSTNAME"
+        exit 0
+      fi
+      i=$((i+1))
+      sleep "$SLEEP_SECONDS"
+    done
+    echo "ERROR: Failed to resolve Infisical Ingress hostname after $((MAX_RETRIES * SLEEP_SECONDS))s" >&2
+    exit 1

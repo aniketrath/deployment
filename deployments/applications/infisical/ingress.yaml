@@ -3,17 +3,14 @@ kind: Ingress
 metadata:
   name: infisical
   namespace: applications
-  annotations:
-    argocd.argoproj.io/sync-wave: "1"
 spec:
   ingressClassName: tailscale
   tls:
     - hosts:
-        - infisical.perch-humboldt.ts.net
+        - infisical
       secretName: infisical-tls-cert
   rules:
-    - host: infisical.perch-humboldt.ts.net
-      http:
+    - http:
         paths:
           - path: /
             pathType: Prefix

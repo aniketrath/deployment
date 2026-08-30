@@ -1,13 +1,26 @@
 #######################################################################
 # .env & Variables
 #######################################################################
-ARGOCD_NAMESPACE   ?= argocd
-ARGOCD_ENV         ?= production
+FLUX_NAMESPACE     ?= flux-system
+FLUX_PATH          ?= clusters/staging
+GITLAB_OWNER       ?= stackcraft
+GITLAB_REPO        ?= deployment
+GIT_BRANCH         ?= staging
 HEADLAMP_NAMESPACE ?= infrastructure
 NAMESPACES_DIR     ?= namespaces
 DEPLOYMENTS_DIR    ?= deployments
+FLUX               ?= flux
 HELM               ?= helm
 KUBECTL            ?= kubectl
+PYTHON             ?= python3
+YAMLLINT           ?= yamllint
+KUBECONFORM        ?= kubeconform
+TRIVY              ?= trivy
+KUBECONFORM_CACHE  ?= .cache/kubeconform
+TRIVY_IGNOREFILE   ?= .trivyignore.yaml
+# Public catalog of real JSON Schemas for popular CRDs (Flux, cert-manager, etc.),
+# generated from the CRDs themselves. See https://github.com/datreeio/CRDs-catalog
+CRD_SCHEMA_LOCATION ?= https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json
 
 #######################################################################
 # Naming convention for targets:
@@ -16,27 +29,26 @@ KUBECTL            ?= kubectl
 #   creds-<app>              - print login credentials (password, token, etc.)
 #   deploy-<scope>           - bulk manual apply across several manifests/apps
 #   clean-<scope>            - bulk manual teardown, mirrors deploy-<scope>
+#   reconcile-<tier>         - force Flux to re-sync a specific Kustomization now
 #######################################################################
 
 .PHONY: help check-cluster
 
 help:
 	@echo "Available Makefile targets:"
-	@echo "  clean                 - Full teardown: Argo CD, wave infra, namespaces, finalizer stripping"
+	@echo "  bootstrap-flux        - Bootstrap Flux against this repo (GITLAB_TOKEN required)"
+	@echo "  clean                 - Full teardown: Flux, namespaces, finalizer stripping"
 	@echo "  clean-namespaces      - Delete all managed namespaces (Caution!)"
-	@echo "  clean-wave-infra      - Manually remove Wave -1 infrastructure"
-	@echo "  creds-argocd          - Retrieve initial Argo CD admin password"
 	@echo "  creds-headlamp        - Retrieve Headlamp admin bearer token"
-	@echo "  deploy-argocd-stack   - Install Argo CD stack and apply the root ApplicationSet (ARGOCD_ENV=production|staging)"
-	@echo "  deploy-namespaces     - Create or update all core namespaces"
-	@echo "  deploy-wave-infra     - Manually apply Wave -1 infrastructure (Postgres, Redis)"
-	@echo "  install-argocd        - Install/upgrade Argo CD only"
+	@echo "  deploy-namespaces     - Manually apply core namespaces (break-glass only; Flux owns this)"
+	@echo "  install-test-tools    - Install/verify local CLI tools needed by 'make test' (yamllint, kubeconform, trivy, PyYAML)"
+	@echo "  reconcile-<tier>      - Force Flux to reconcile now (namespaces|infra-postgres|infra-redis|apps-infisical|apps-vaultwarden)"
 	@echo "  setup-prerequisites   - Add all Helm repos and install cluster prerequisites (Reflector)"
-	@echo "  status-argocd         - Check status of Argo CD pods, services, and ingress"
-	@echo "  status-headlamp       - Check status of Headlamp pods, service, and ingress (deployed via ArgoCD)"
+	@echo "  status-flux           - Check status of all Flux Kustomizations, HelmReleases, and sources"
+	@echo "  status-headlamp       - Check status of Headlamp pods, service, and ingress (deployed via Flux HelmRelease)"
 	@echo "  status-namespaces     - Check status of managed namespaces"
-	@echo "  test                  - Run all local CI checks (lint, schema validation, security scan)"
-	@echo "  uninstall-argocd      - Remove Argo CD release and associated root apps"
+	@echo "  test                  - Run all local CI checks (lint, schema + Flux CRD validation, Flux build/graph validation, security scan)"
+	@echo "  uninstall-flux        - Remove Flux controllers and CRDs (does NOT remove already-applied workloads)"
 
 check-cluster:
 	@$(KUBECTL) cluster-info >/dev/null 2>&1 || (echo "Error: Kubernetes cluster is not accessible." && exit 1)
@@ -47,9 +59,9 @@ check-cluster:
 .PHONY: status-namespaces deploy-namespaces clean-namespaces
 
 status-namespaces: check-cluster ## Check status of managed namespaces
-	@$(KUBECTL) get ns infrastructure applications tailscale argocd -o wide --ignore-not-found
+	@$(KUBECTL) get ns infrastructure applications tailscale flux-system -o wide --ignore-not-found
 
-deploy-namespaces: check-cluster ## Create or update all core namespaces
+deploy-namespaces: check-cluster ## Manually apply core namespaces (break-glass only; Flux's "namespaces" Kustomization owns this in normal operation)
 	@echo "===> Applying namespaces..."
 	@$(KUBECTL) apply -f $(NAMESPACES_DIR)/
 
@@ -60,9 +72,9 @@ clean-namespaces: check-cluster ## Delete all managed namespaces (Caution!)
 # ==============================================================================
 # Prerequisites & Helm Repositories
 # ==============================================================================
-.PHONY: setup-prerequisites add-helm-repos
+.PHONY: setup-prerequisites add-helm-repos install-test-tools
 
-setup-prerequisites: add-helm-repos
+setup-prerequisites: add-helm-repos ## Install cluster-side prerequisites (Helm-managed)
 	@echo "===> Installing Kubernetes Reflector controller..."
 	@$(HELM) upgrade --install reflector emberstack/reflector \
 		--namespace kube-system \
@@ -71,72 +83,93 @@ setup-prerequisites: add-helm-repos
 
 add-helm-repos:
 	@echo "===> Adding and updating all required Helm repositories..."
-	@$(HELM) repo add argo https://argoproj.github.io/argo-helm --force-update
 	@$(HELM) repo add emberstack https://emberstack.github.io/helm-charts --force-update
 	@$(HELM) repo update
 
-# ==============================================================================
-# Argo CD (GitOps Controller)
-# ==============================================================================
-.PHONY: deploy-argocd-stack install-argocd uninstall-argocd status-argocd creds-argocd
+# NOTE: yamllint, kubeconform, trivy, and PyYAML are local CLI/library tooling
+# used only to lint and dry-run manifests on your machine before anything is
+# ever applied to a cluster - they are not Kubernetes workloads, so Helm has
+# nothing to install here. This target is the local-tooling equivalent of
+# setup-prerequisites: idempotent, and safe to re-run any time.
+install-test-tools: ## Install/verify local CLI tools needed by 'make test'
+	@echo "===> Checking local test tooling..."
+	@command -v $(PYTHON) >/dev/null 2>&1 || (echo "Error: python3 is required and was not found on PATH." && exit 1)
+	@$(PYTHON) -c "import yaml" >/dev/null 2>&1 || { \
+		echo "--> Installing PyYAML (required by scripts/validate-flux-deps.py)..."; \
+		$(PYTHON) -m pip install --user pyyaml || exit 1; \
+	}
+	@command -v $(YAMLLINT) >/dev/null 2>&1 || { \
+		echo "--> Installing yamllint..."; \
+		$(PYTHON) -m pip install --user yamllint || exit 1; \
+	}
+	@command -v $(KUBECONFORM) >/dev/null 2>&1 || { \
+		echo "--> Installing kubeconform..."; \
+		if command -v brew >/dev/null 2>&1; then \
+			brew install kubeconform; \
+		elif command -v go >/dev/null 2>&1; then \
+			go install github.com/yannh/kubeconform/cmd/kubeconform@latest; \
+		else \
+			echo "Error: kubeconform not found and no brew/go available to install it."; \
+			echo "        Install manually: https://github.com/yannh/kubeconform#installation"; \
+			exit 1; \
+		fi; \
+	}
+	@command -v $(TRIVY) >/dev/null 2>&1 || { \
+		echo "--> Installing trivy..."; \
+		if command -v brew >/dev/null 2>&1; then \
+			brew install trivy; \
+		else \
+			curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh \
+				| sh -s -- -b /usr/local/bin || { \
+					echo "Error: trivy install script failed."; \
+					echo "        Install manually: https://aquasecurity.github.io/trivy/latest/getting-started/installation/"; \
+					exit 1; \
+				}; \
+		fi; \
+	}
+	@mkdir -p $(KUBECONFORM_CACHE)
+	@echo "===> All test tooling present."
 
-deploy-argocd-stack: deploy-namespaces setup-prerequisites add-helm-repos install-argocd status-argocd creds-argocd
+# ==============================================================================
+# Flux (GitOps Controller)
+# ==============================================================================
+.PHONY: bootstrap-flux uninstall-flux status-flux reconcile-%
 
-install-argocd: check-cluster
-	@echo "Installing/Upgrading Argo CD in namespace '$(ARGOCD_NAMESPACE)'..."
-	@if [ -f "charts/argo-cd-10.3.2.tgz" ]; then \
-		echo "Using local chart tarball charts/argo-cd-10.3.2.tgz..."; \
-		$(HELM) upgrade --install argocd charts/argo-cd-10.3.2.tgz \
-			--namespace $(ARGOCD_NAMESPACE) \
-			-f bootstrap/argocd/values.yaml; \
-	else \
-		echo "Local chart not found, fetching from remote repo..."; \
-		$(HELM) upgrade --install argocd argo/argo-cd \
-			--namespace $(ARGOCD_NAMESPACE) \
-			-f bootstrap/argocd/values.yaml; \
+bootstrap-flux: check-cluster ## Bootstrap Flux against this repo (requires GITLAB_TOKEN env var, api scope)
+	@if [ -z "$$GITLAB_TOKEN" ]; then \
+		echo "Error: GITLAB_TOKEN is not set."; exit 1; \
 	fi
-	@echo "Waiting for Argo CD server to be ready before applying bootstrap..."
-	@$(KUBECTL) rollout status deployment argocd-server -n $(ARGOCD_NAMESPACE) --timeout=120s
-	@echo "Applying root ApplicationSet (env: $(ARGOCD_ENV))..."
-	@$(KUBECTL) apply -f bootstrap/argocd/$(ARGOCD_ENV)/argocd.yaml
-	@echo "Argo CD deployment and application bootstrap completed successfully."
+	@echo "Bootstrapping Flux ($(GIT_BRANCH) branch, path $(FLUX_PATH))..."
+	@$(FLUX) bootstrap gitlab \
+		--owner=$(GITLAB_OWNER) \
+		--repository=$(GITLAB_REPO) \
+		--branch=$(GIT_BRANCH) \
+		--path=$(FLUX_PATH) \
+		--token-auth \
+		--personal
+	@echo "Waiting for all Kustomizations to reconcile..."
+	@$(FLUX) get kustomizations
+	@echo "Flux bootstrap complete."
 
-uninstall-argocd:
-	@echo "Uninstalling Argo CD release..."
-	-@$(KUBECTL) delete application root-applications -n $(ARGOCD_NAMESPACE) --ignore-not-found=true
-	@$(HELM) uninstall argocd --namespace $(ARGOCD_NAMESPACE) --ignore-not-found || true
-	@echo "Argo CD helm cleanup complete."
+uninstall-flux: check-cluster ## Remove Flux controllers and CRDs only (workloads already applied remain running)
+	@echo "Uninstalling Flux..."
+	@$(FLUX) uninstall --namespace=$(FLUX_NAMESPACE) --silent
+	@echo "Flux controller cleanup complete."
 
-status-argocd: check-cluster
-	@$(KUBECTL) get pods,svc,ingress -n $(ARGOCD_NAMESPACE)
+status-flux: check-cluster
+	@echo "===> Kustomizations:"
+	@$(FLUX) get kustomizations
+	@echo "===> HelmReleases:"
+	@$(FLUX) get helmreleases --all-namespaces
+	@echo "===> Sources:"
+	@$(FLUX) get sources git
 
-creds-argocd: check-cluster
-	@echo "Argo CD Admin Username: admin"
-	@echo -n "Argo CD Admin Password: "
-	@$(KUBECTL) -n $(ARGOCD_NAMESPACE) get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 --decode
-	@echo ""
-
-# ==============================================================================
-# Manual Infrastructure Deployment (Wave -1)
-# Bootstrap-only: applied by hand before Argo CD exists to run these itself.
-# ==============================================================================
-.PHONY: deploy-wave-infra clean-wave-infra
-
-deploy-wave-infra: check-cluster
-	@echo "===> Deploying Wave -1: Postgres and Redis manifests manually..."
-	@$(KUBECTL) apply -f $(DEPLOYMENTS_DIR)/infrastructure/postgres/
-	@$(KUBECTL) apply -f $(DEPLOYMENTS_DIR)/infrastructure/redis/
-	@echo "===> Wave -1 infrastructure deployed successfully!"
-
-clean-wave-infra: check-cluster
-	@echo "===> Removing Wave -1: Postgres and Redis manifests manually..."
-	@$(KUBECTL) delete -f $(DEPLOYMENTS_DIR)/infrastructure/redis/ --ignore-not-found
-	@$(KUBECTL) delete -f $(DEPLOYMENTS_DIR)/infrastructure/postgres/ --ignore-not-found
-	@echo "===> Wave -1 infrastructure removed."
+reconcile-%: check-cluster ## Force Flux to reconcile a specific tier now, e.g. `make reconcile-apps-infisical`
+	@$(FLUX) reconcile kustomization $* --with-source
 
 # ==============================================================================
-# Headlamp Dashboard (deployed via ArgoCD Application — see deployments/infrastructure/headlamp/)
-# Install/delete are owned by Argo's sync loop; these targets are for local
+# Headlamp Dashboard (deployed via Flux HelmRelease — see deployments/infrastructure/headlamp/)
+# Install/delete are owned by Flux's reconcile loop; these targets are for local
 # inspection only.
 # ==============================================================================
 .PHONY: status-headlamp creds-headlamp
@@ -152,21 +185,47 @@ creds-headlamp: check-cluster
 # ==============================================================================
 # Local Testing & Linting (Mirrors GitLab CI)
 # ==============================================================================
-.PHONY: test lint-yaml validate-schemas scan-security
+.PHONY: test lint-yaml validate-schemas validate-flux scan-security
 
-lint-yaml: ## Check YAML syntax locally
+lint-yaml: install-test-tools ## Check YAML syntax locally
 	@echo "==> Running yamllint..."
-	yamllint $(DEPLOYMENTS_DIR)/ $(NAMESPACES_DIR)/ bootstrap/
+	$(YAMLLINT) $(DEPLOYMENTS_DIR)/ $(NAMESPACES_DIR)/ clusters/
 
-validate-schemas: ## Validate Kubernetes schemas with kubeconform
-	@echo "==> Running kubeconform..."
-	find $(DEPLOYMENTS_DIR)/ $(NAMESPACES_DIR)/ -type f \( -name "*.yaml" -o -name "*.yml" \) ! -name "*values*" ! -iname "Chart.yaml" -print0 | xargs -0 kubeconform -summary -strict -ignore-missing-schemas
+# Validates every plain Kubernetes manifest AND every Flux custom resource
+# (Kustomization/HelmRelease/HelmRepository/GitRepository) against real
+# schemas: core Kubernetes types from kubeconform's default catalog, Flux CRDs
+# from the datreeio/CRDs-catalog. kustomization.yaml is excluded on purpose —
+# it's a client-side kustomize build file, never a real API object, so it has
+# no schema anywhere; it's already fully exercised by `validate-flux` below.
+# No -ignore-missing-schemas: every kind actually used in this repo resolves
+# to a real schema, so an unresolved kind means something is genuinely wrong.
+validate-schemas: install-test-tools ## Validate Kubernetes + Flux CRD schemas with kubeconform
+	@echo "==> Running kubeconform (core Kubernetes schemas + Flux CRD catalog)..."
+	find $(DEPLOYMENTS_DIR)/ $(NAMESPACES_DIR)/ clusters/ -type f \( -name "*.yaml" -o -name "*.yml" \) \
+		! -name "*values*" ! -iname "Chart.yaml" ! -name "kustomization.yaml" -print0 \
+		| xargs -0 $(KUBECONFORM) -summary -strict \
+			-cache $(KUBECONFORM_CACHE) \
+			-schema-location default \
+			-schema-location '$(CRD_SCHEMA_LOCATION)'
 
-scan-security: ## Scan manifests for security risks with Trivy
+validate-flux: install-test-tools ## Dry-run kustomize build for every Flux-managed path + validate the clusters/ dependsOn graph
+	@echo "==> Validating kustomize build for every Flux-managed path..."
+	@found=0; \
+	for kfile in $$(find $(DEPLOYMENTS_DIR) -name kustomization.yaml); do \
+		dir=$$(dirname "$$kfile"); \
+		echo "--> $$dir"; \
+		$(KUBECTL) kustomize "$$dir" > /dev/null || exit 1; \
+		found=$$((found+1)); \
+	done; \
+	echo "    ($$found kustomization path(s) built OK)"
+	@echo "==> Validating Flux dependsOn graph and Kustomization paths under clusters/..."
+	@$(PYTHON) scripts/validate-flux-deps.py || exit 1
+
+scan-security: install-test-tools ## Scan manifests for security risks with Trivy
 	@echo "==> Running trivy security scan..."
-	trivy config --severity HIGH,CRITICAL .
+	$(TRIVY) config --severity HIGH,CRITICAL --ignorefile $(TRIVY_IGNOREFILE) .
 
-test: lint-yaml validate-schemas scan-security ## Run all CI checks locally in one command
+test: lint-yaml validate-schemas validate-flux scan-security ## Run all local CI checks in one command
 	@echo "==> All local checks passed successfully!"
 
 # ==============================================================================
@@ -174,13 +233,12 @@ test: lint-yaml validate-schemas scan-security ## Run all CI checks locally in o
 # ==============================================================================
 .PHONY: clean
 
-# NOTE: Headlamp, Vaultwarden, and Tailscale are all deployed as ArgoCD
-# Applications now and are NOT torn down here individually — deleting
-# root-applications above (via uninstall-argocd) cascades to them, provided
-# cascade delete / finalizers are enabled on those Application resources.
-# If an app ever needs a standalone teardown outside of Argo, add a
-# `clean-<app>` target for it here.
-clean: check-cluster uninstall-argocd clean-wave-infra clean-namespaces ## Completely wipe out all apps, operators, and namespaces with dynamic finalizer stripping
+# NOTE: Vaultwarden, Infisical, Postgres, Redis, Headlamp, and the Tailscale
+# operator are all reconciled by Flux Kustomizations/HelmReleases now.
+# `uninstall-flux` removes the controllers but does NOT prune what they already
+# applied — clean-namespaces below is what actually removes the workloads,
+# by deleting the namespaces they live in.
+clean: check-cluster uninstall-flux clean-namespaces ## Completely wipe out all apps, operators, and namespaces with dynamic finalizer stripping
 	@echo "==> Cleaning up lingering ingress finalizers across all dynamic namespaces..."
 	@for ns in $$(kubectl get namespaces -o jsonpath='{.items[*].metadata.name}' 2>/dev/null); do \
 		if [ "$$ns" != "kube-system" ] && [ "$$ns" != "kube-public" ] && [ "$$ns" != "kube-node-lease" ] && [ "$$ns" != "default" ]; then \

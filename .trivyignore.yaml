@@ -1,0 +1,35 @@
+misconfigurations:
+  - id: KSV-0109
+    paths:
+      - "deployments/applications/vaultwarden/script.vaultwarden-bootstrap.yaml"
+    statement: >
+      False positive: this ConfigMap only holds a shell script that fetches
+      secrets at runtime from Infisical into shell variables / an emptyDir
+      volume. No secret value is hardcoded or persisted in the ConfigMap
+      itself - Trivy is pattern-matching on the variable name ACCESS_TOKEN=
+      inside a grep/cut pipeline, not an embedded credential.
+
+  - id: KSV-0047
+    paths:
+      - "deployments/infrastructure/headlamp/rbac.yaml"
+    statement: >
+      Accepted risk, not a false positive: this ClusterRole intentionally grants
+      nodes/proxy so Headlamp's built-in "Node Shell" UI can reach the kubelet
+      API directly. This is functionally close to node-root access, since the
+      kubelet API has a separate, less-restricted permission surface than the
+      main API server. Scoped to the headlamp-admin ServiceAccount only, bound
+      via headlamp-exec ClusterRole, not granted cluster-wide. Revisit if
+      Headlamp's node-shell feature is ever dropped in favor of
+      kubectl-debug-style pod-based access, which only needs pods/exec.
+
+  - id: KSV-0053
+    paths:
+      - "deployments/infrastructure/headlamp/rbac.yaml"
+    statement: >
+      Accepted risk, not a false positive: pods/exec create is the explicit
+      purpose of the headlamp-exec ClusterRole - Headlamp needs it to exec
+      into pods from the dashboard. Same acceptance as KSV-0047 above: this
+      is a known privilege-escalation path (exec into a pod with a
+      higher-privileged ServiceAccount attached, or host access via a
+      privileged pod), deliberately granted and scoped only to
+      headlamp-admin, not cluster-wide.

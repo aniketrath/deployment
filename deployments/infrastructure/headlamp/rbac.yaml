@@ -1,25 +1,54 @@
-# applications/headlamp/rbac.yaml
 apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: headlamp-admin
   namespace: infrastructure
-  annotations:
-    argocd.argoproj.io/sync-wave: "2"
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: headlamp-exec
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch", "create", "delete"]
+  - apiGroups: [""]
+    resources: ["pods/exec", "pods/attach", "pods/portforward"]
+    verbs: ["create", "get"]
+  - apiGroups: [""]
+    resources: ["pods/ephemeralcontainers"]
+    verbs: ["update"]
+  - apiGroups: [""]
+    resources: ["nodes"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["nodes/proxy"]
+    verbs: ["get", "create"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: headlamp-admin-binding
-  annotations:
-    argocd.argoproj.io/sync-wave: "2"
+  name: headlamp-admin-view-binding
 subjects:
   - kind: ServiceAccount
     name: headlamp-admin
     namespace: infrastructure
 roleRef:
   kind: ClusterRole
-  name: cluster-admin
+  name: view
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: headlamp-admin-exec-binding
+subjects:
+  - kind: ServiceAccount
+    name: headlamp-admin
+    namespace: infrastructure
+roleRef:
+  kind: ClusterRole
+  name: headlamp-exec
   apiGroup: rbac.authorization.k8s.io
 ---
 apiVersion: v1
@@ -28,6 +57,5 @@ metadata:
   name: headlamp-admin-token
   namespace: infrastructure
   annotations:
-    argocd.argoproj.io/sync-wave: "2"
     kubernetes.io/service-account.name: headlamp-admin
 type: kubernetes.io/service-account-token
