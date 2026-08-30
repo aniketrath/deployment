@@ -19,19 +19,22 @@ pluginsManager:
   baseImage: node:lts-alpine
   version: latest
   configContent: |
-    plugins:
-      - name: cert-manager
-        source: https://artifacthub.io/packages/headlamp/headlamp-plugins/headlamp_cert-manager
-        version: 0.1.0
-      - name: kubescape
-        source: https://artifacthub.io/packages/headlamp/kubescape-headlamp-plugin/headlamp_kubescape
-        version: 0.11.2
-      - name: kube-vip
-        source: https://artifacthub.io/packages/headlamp/headlamp-kube-vip/headlamp-kube-vip
-        version: 1.0.2
-      - name: metallb
-        source: https://artifacthub.io/packages/headlamp/headlamp-metallb-plugin/headlamp-metallb-plugin
-        version: 0.5.1
-    installOptions:
-      parallel: true
-      maxConcurrent: 2
+  plugins:
+    - name: cert-manager
+      source: https://artifacthub.io/packages/headlamp/headlamp-plugins/headlamp_cert-manager
+      version: 0.1.0
+    - name: kubescape
+      source: https://artifacthub.io/packages/headlamp/kubescape-headlamp-plugin/headlamp_kubescape
+      version: 0.11.2
+    - name: kube-vip
+      source: https://artifacthub.io/packages/headlamp/headlamp-kube-vip/headlamp-kube-vip
+      version: 1.0.2
+    - name: metallb
+      source: https://artifacthub.io/packages/headlamp/headlamp-metallb-plugin/headlamp-metallb-plugin
+      version: 0.5.1
+    - name: headlamp_flux
+      source: https://artifacthub.io/packages/headlamp/headlamp-plugins/headlamp_flux
+      version: 0.4.0
+  installOptions:
+          parallel: true
+          maxConcurrent: 2
