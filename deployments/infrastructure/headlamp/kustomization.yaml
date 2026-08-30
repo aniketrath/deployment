@@ -12,3 +12,5 @@ configMapGenerator:
     namespace: flux-system
     files:
       - values.yaml
+    options:
+      disableNameSuffixHash: true
