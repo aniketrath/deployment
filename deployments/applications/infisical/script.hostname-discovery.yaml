@@ -14,7 +14,7 @@ data:
     i=0
     while [ "$i" -lt "$MAX_RETRIES" ]; do
       RESPONSE="$(curl -s -k -H "Authorization: Bearer ${TOKEN}" "${API}/apis/networking.k8s.io/v1/namespaces/applications/ingresses/infisical")"
-      HOSTNAME="$(echo "$RESPONSE" | grep -o '"hostname":"[^"]*"' | head -n1 | cut -d'"' -f4)"
+      HOSTNAME="$(echo "$RESPONSE" | grep -o '"hostname":[[:space:]]*"[^"]*"' | head -n1 | cut -d'"' -f4)"
       if [ -n "$HOSTNAME" ]; then
         echo "$HOSTNAME" > /shared/domain
         echo "Resolved hostname: $HOSTNAME"
