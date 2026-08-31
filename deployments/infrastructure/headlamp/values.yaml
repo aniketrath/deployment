@@ -6,6 +6,9 @@ config:
 serviceAccount:
   create: false
   name: headlamp-admin
+clusterRoleBinding:
+  create: true
+  clusterRoleName: view
 replicaCount: 1
 resources:
   limits:
