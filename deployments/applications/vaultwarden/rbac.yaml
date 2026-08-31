@@ -22,3 +22,16 @@ roleRef:
   kind: Role
   name: vaultwarden-ingress-reader
   apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: vaultwarden-token-reviewer
+subjects:
+  - kind: ServiceAccount
+    name: vaultwarden-sa
+    namespace: applications
+roleRef:
+  kind: ClusterRole
+  name: system:auth-delegator
+  apiGroup: rbac.authorization.k8s.io
