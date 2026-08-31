@@ -2,7 +2,6 @@ config:
   # Base path if hosted behind a subpath (leave empty for root domain)
   baseURL: ""
   # Enable automatic plugin reload when the plugin config changes
-  pluginsDir: /build/plugins
   watchPlugins: true
 serviceAccount:
   create: false
@@ -37,24 +36,18 @@ pluginsManager:
       parallel: true
       maxConcurrent: 2
 initContainers:
-  - command:
-      - /bin/sh
-      - -c
-      - mkdir -p /build/plugins && cp -r /plugins/* /build/plugins/ && chown -R 100:101 /build
+  - name: headlamp-flux-plugin
     image: ghcr.io/headlamp-k8s/headlamp-plugin-flux:latest
     imagePullPolicy: Always
-    name: headlamp-plugins
+    command:
+      - /bin/sh
+      - -c
+      - cp -r /plugins/* /headlamp-plugins-shared/
     securityContext:
       runAsNonRoot: false
       privileged: false
       runAsUser: 0
       runAsGroup: 0
     volumeMounts:
-      - mountPath: /build/plugins
-        name: headlamp-plugins
-volumeMounts:
-  - mountPath: /build/plugins
-    name: headlamp-plugins
-volumes:
-  - name: headlamp-plugins
-    emptyDir: {}
+      - name: plugins-dir
+        mountPath: /headlamp-plugins-shared
