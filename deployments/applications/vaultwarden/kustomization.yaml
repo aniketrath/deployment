@@ -6,23 +6,6 @@ resources:
   - ingress.yaml
   - pvc.yaml
   - service.yaml
-
-patches:
-  - target:
-      kind: Ingress
-      name: vaultwarden
-    patch: |-
-      - op: replace
-        path: /spec/rules/0/host
-        value: vault.chimera-fence.ts.net
-      - op: replace
-        path: /spec/tls/0/hosts/0
-        value: vault.chimera-fence.ts.net
-
-  - target:
-      kind: Deployment
-      name: vaultwarden
-    patch: |-
-      - op: replace
-        path: /spec/template/spec/containers/0/env/3/value
-        value: "https://vault.chimera-fence.ts.net"
+  - serviceaccount.yaml
+  - rbac.yaml
+  - script.vaultwarden-bootstrap.yaml
