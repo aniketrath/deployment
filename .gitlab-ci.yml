@@ -2,6 +2,7 @@ stages:
   - lint
   - validate
   - security
+  - test
 
 include:
   - template: Jobs/Secret-Detection.gitlab-ci.yml
