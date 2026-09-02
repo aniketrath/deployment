@@ -18,6 +18,11 @@ spec:
   targetNamespace: applications
   wait: true
   timeout: 5m
+  postBuild:
+    substitute:
+      infisical_identity_id: "e91c47c3-19fa-417e-924e-0fe93e0bf660"
+      infisical_project_id: "f795f484-3d88-4065-9030-4a0f32bddbfb"
+      infisical_environment: "staging"
   healthChecks:
     - apiVersion: apps/v1
       kind: Deployment

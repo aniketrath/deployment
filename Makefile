@@ -197,12 +197,16 @@ lint-yaml: install-test-tools ## Check YAML syntax locally
 # from the datreeio/CRDs-catalog. kustomization.yaml is excluded on purpose —
 # it's a client-side kustomize build file, never a real API object, so it has
 # no schema anywhere; it's already fully exercised by `validate-flux` below.
+# gotk-components.yaml is also excluded because it contains Flux's generated
+# CustomResourceDefinition objects, for which kubeconform has no catalog schema;
+# the generated file is still covered by yamllint and the kustomize build.
 # No -ignore-missing-schemas: every kind actually used in this repo resolves
 # to a real schema, so an unresolved kind means something is genuinely wrong.
 validate-schemas: install-test-tools ## Validate Kubernetes + Flux CRD schemas with kubeconform
 	@echo "==> Running kubeconform (core Kubernetes schemas + Flux CRD catalog)..."
 	find $(DEPLOYMENTS_DIR)/ $(NAMESPACES_DIR)/ clusters/ -type f \( -name "*.yaml" -o -name "*.yml" \) \
-		! -name "*values*" ! -iname "Chart.yaml" ! -name "kustomization.yaml" -print0 \
+		! -name "*values*" ! -iname "Chart.yaml" ! -name "kustomization.yaml" \
+		! -name "gotk-components.yaml" -print0 \
 		| xargs -0 $(KUBECONFORM) -summary -strict \
 			-cache $(KUBECONFORM_CACHE) \
 			-schema-location default \

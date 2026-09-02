@@ -29,11 +29,11 @@ spec:
           command: ["/bin/sh", "/scripts/bootstrap.sh"]
           env:
             - name: INFISICAL_IDENTITY_ID
-              value: "e91c47c3-19fa-417e-924e-0fe93e0bf660"
+              value: "${infisical_identity_id}"
             - name: INFISICAL_PROJECT_ID
-              value: "f795f484-3d88-4065-9030-4a0f32bddbfb"
+              value: "${infisical_project_id}"
             - name: INFISICAL_ENVIRONMENT
-              value: "staging"
+              value: "${infisical_environment}"
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
