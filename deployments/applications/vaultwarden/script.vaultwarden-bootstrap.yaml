@@ -17,7 +17,7 @@ data:
     i=0
     HOSTNAME=""
     while [ "$i" -lt "$MAX_RETRIES" ]; do
-      RESPONSE="$(curl -s -k -H "Authorization: Bearer ${TOKEN}" "${K8S_API}/apis/networking.k8s.io/v1/namespaces/applications/ingresses/vaultwarden")"
+      RESPONSE="$(curl -s -k -H "Authorization: Bearer $${TOKEN}" "$${K8S_API}/apis/networking.k8s.io/v1/namespaces/applications/ingresses/vaultwarden")"
       HOSTNAME="$(echo "$RESPONSE" | grep -o '"hostname":[[:space:]]*"[^"]*"' | head -n1 | cut -d'"' -f4)"
       [ -n "$HOSTNAME" ] && break
       i=$((i+1)); sleep "$SLEEP_SECONDS"
@@ -30,9 +30,9 @@ data:
     i=0
     ACCESS_TOKEN=""
     while [ "$i" -lt "$MAX_RETRIES" ]; do
-      AUTH_RESPONSE="$(curl -s -X POST "${INFISICAL_API}/api/v1/auth/kubernetes-auth/login" \
+      AUTH_RESPONSE="$(curl -s -X POST "$${INFISICAL_API}/api/v1/auth/kubernetes-auth/login" \
         -H "Content-Type: application/json" \
-        -d "{\"identityId\":\"${INFISICAL_IDENTITY_ID}\",\"jwt\":\"${TOKEN}\"}")"
+        -d "{\"identityId\":\"$${INFISICAL_IDENTITY_ID}\",\"jwt\":\"$${TOKEN}\"}")"
       ACCESS_TOKEN="$(echo "$AUTH_RESPONSE" | grep -o '"accessToken":[[:space:]]*"[^"]*"' | head -n1 | cut -d'"' -f4)"
       [ -n "$ACCESS_TOKEN" ] && break
       i=$((i+1)); sleep "$SLEEP_SECONDS"
@@ -40,8 +40,8 @@ data:
     [ -n "$ACCESS_TOKEN" ] || { echo "ERROR: failed to authenticate to Infisical" >&2; exit 1; }
 
     # --- Fetch VAULT_ADMIN_TOKEN directly into memory, no k8s Secret ever created ---
-    SECRET_RESPONSE="$(curl -s -H "Authorization: Bearer ${ACCESS_TOKEN}" \
-      "${INFISICAL_API}/api/v3/secrets/raw/VAULT_ADMIN_TOKEN?workspaceId=${INFISICAL_PROJECT_ID}&environment=${INFISICAL_ENVIRONMENT}&secretPath=%2F")"
+    SECRET_RESPONSE="$(curl -s -H "Authorization: Bearer $${ACCESS_TOKEN}" \
+      "$${INFISICAL_API}/api/v3/secrets/raw/$${VAULT_ADMIN_TOKEN_SECRET_NAME}?workspaceId=$${INFISICAL_PROJECT_ID}&environment=$${INFISICAL_ENVIRONMENT}&secretPath=%2F")"
     ADMIN_TOKEN_VALUE="$(echo "$SECRET_RESPONSE" | grep -o '"secretValue":[[:space:]]*"[^"]*"' | head -n1 | cut -d'"' -f4)"
     [ -n "$ADMIN_TOKEN_VALUE" ] || { echo "ERROR: failed to fetch VAULT_ADMIN_TOKEN from Infisical" >&2; exit 1; }
     echo "$ADMIN_TOKEN_VALUE" > /shared/admin_token

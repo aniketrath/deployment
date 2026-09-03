@@ -23,6 +23,7 @@ spec:
       infisical_identity_id: "1201e5db-ed85-41d5-967c-eadaf9b6b168"
       infisical_project_id: "7739441b-3258-4ea9-90e0-70565cc57dab"
       infisical_environment: "staging"
+      vault_admin_token_secret_name: "VAULT_ADMIN_TOKEN"
   healthChecks:
     - apiVersion: apps/v1
       kind: Deployment

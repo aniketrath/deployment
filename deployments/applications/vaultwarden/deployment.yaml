@@ -34,6 +34,8 @@ spec:
               value: "${infisical_project_id}"
             - name: INFISICAL_ENVIRONMENT
               value: "${infisical_environment}"
+            - name: VAULT_ADMIN_TOKEN_SECRET_NAME
+              value: "${vault_admin_token_secret_name}"
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
