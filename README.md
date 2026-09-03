@@ -104,6 +104,28 @@ from Infisical at startup. Headlamp depends on Infisical and Tailscale.
 
 Both apps are reachable only over Tailscale, never the public internet.
 
+## Local production-network simulation
+
+`kind-config.yaml` keeps the three-node production-shaped topology and reserves
+the following addresses for an optional VIP simulation:
+
+- `192.168.1.230` — kube-vip control-plane VIP
+- `192.168.1.231-192.168.1.240` — MetalLB `LoadBalancer` Services
+
+Install MetalLB and apply its pool with:
+
+```sh
+make setup-kind-lb
+```
+
+These addresses must be reachable on the Docker/Kind network. A normal Kind
+Docker bridge does not advertise arbitrary `192.168.1.x` addresses onto the
+physical LAN, so use a LAN-attached Docker network (or change the pool to an
+unused subnet on the Docker bridge) before expecting clients outside Docker to
+reach a `LoadBalancer` Service. The API continues to bootstrap through
+`127.0.0.1:6443`; kube-vip can be layered on afterward when the Kind nodes share
+the VIP-capable L2 network.
+
 ## Environments
 
 - **staging** — tracks the `staging` branch, path `clusters/staging`.

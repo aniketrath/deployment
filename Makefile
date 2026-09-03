@@ -18,6 +18,8 @@ KUBECONFORM        ?= kubeconform
 TRIVY              ?= trivy
 KUBECONFORM_CACHE  ?= .cache/kubeconform
 TRIVY_IGNOREFILE   ?= .trivyignore.yaml
+APPLY_TEST_SECRETS ?= false
+TESTCREDS_DIR      ?= testcreds
 # Public catalog of real JSON Schemas for popular CRDs (Flux, cert-manager, etc.),
 # generated from the CRDs themselves. See https://github.com/datreeio/CRDs-catalog
 CRD_SCHEMA_LOCATION ?= https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json
@@ -42,6 +44,8 @@ help:
 	@echo "  creds-headlamp        - Retrieve Headlamp admin bearer token"
 	@echo "  deploy-namespaces     - Manually apply core namespaces (break-glass only; Flux owns this)"
 	@echo "  install-test-tools    - Install/verify local CLI tools needed by 'make test' (yamllint, kubeconform, trivy, PyYAML)"
+	@echo "  setup-kind-lb         - Install MetalLB and configure the production-simulation VIP pool"
+	@echo "  apply-test-secrets    - Apply test credentials after namespaces exist when APPLY_TEST_SECRETS=true"
 	@echo "  reconcile-<tier>      - Force Flux to reconcile now (namespaces|infra-postgres|infra-redis|apps-infisical|apps-vaultwarden)"
 	@echo "  setup-prerequisites   - Add all Helm repos and install cluster prerequisites (Reflector)"
 	@echo "  status-flux           - Check status of all Flux Kustomizations, HelmReleases, and sources"
@@ -56,7 +60,7 @@ check-cluster:
 # ==============================================================================
 # Namespaces
 # ==============================================================================
-.PHONY: status-namespaces deploy-namespaces clean-namespaces
+.PHONY: status-namespaces deploy-namespaces apply-test-secrets clean-namespaces
 
 status-namespaces: check-cluster ## Check status of managed namespaces
 	@$(KUBECTL) get ns infrastructure applications tailscale flux-system -o wide --ignore-not-found
@@ -65,6 +69,14 @@ deploy-namespaces: check-cluster ## Manually apply core namespaces (break-glass 
 	@echo "===> Applying namespaces..."
 	@$(KUBECTL) apply -f $(NAMESPACES_DIR)/
 
+apply-test-secrets: deploy-namespaces ## Apply local test credentials after namespaces exist when enabled
+	@if [ "$(APPLY_TEST_SECRETS)" = "true" ]; then \
+		echo "===> Applying test credentials..."; \
+		$(KUBECTL) apply -f $(TESTCREDS_DIR)/; \
+	else \
+		echo "===> Skipping test credentials (set APPLY_TEST_SECRETS=true to apply them)."; \
+	fi
+
 clean-namespaces: check-cluster ## Delete all managed namespaces (Caution!)
 	@echo "===> Deleting namespaces..."
 	@$(KUBECTL) delete -f $(NAMESPACES_DIR)/ --ignore-not-found
@@ -72,18 +84,28 @@ clean-namespaces: check-cluster ## Delete all managed namespaces (Caution!)
 # ==============================================================================
 # Prerequisites & Helm Repositories
 # ==============================================================================
-.PHONY: setup-prerequisites add-helm-repos install-test-tools
+.PHONY: setup-prerequisites setup-kind-lb add-helm-repos install-test-tools
 
-setup-prerequisites: add-helm-repos ## Install cluster-side prerequisites (Helm-managed)
+setup-prerequisites: check-cluster add-helm-repos ## Install cluster-side prerequisites (Helm-managed)
 	@echo "===> Installing Kubernetes Reflector controller..."
 	@$(HELM) upgrade --install reflector emberstack/reflector \
 		--namespace kube-system \
 		--wait
 	@echo "===> Prerequisites setup complete!"
 
+setup-kind-lb: setup-prerequisites ## Install MetalLB and configure the Kind production-simulation VIP pool
+	@echo "===> Installing MetalLB..."
+	@$(HELM) upgrade --install metallb metallb/metallb \
+		--namespace metallb-system \
+		--create-namespace \
+		--wait
+	@echo "===> Applying LoadBalancer address pool 192.168.1.231-192.168.1.240..."
+	@$(KUBECTL) apply -f kind/metallb.yaml
+
 add-helm-repos:
 	@echo "===> Adding and updating all required Helm repositories..."
 	@$(HELM) repo add emberstack https://emberstack.github.io/helm-charts --force-update
+	@$(HELM) repo add metallb https://metallb.github.io/metallb --force-update
 	@$(HELM) repo update
 
 # NOTE: yamllint, kubeconform, trivy, and PyYAML are local CLI/library tooling
@@ -135,10 +157,11 @@ install-test-tools: ## Install/verify local CLI tools needed by 'make test'
 # ==============================================================================
 .PHONY: bootstrap-flux uninstall-flux status-flux reconcile-%
 
-bootstrap-flux: check-cluster ## Bootstrap Flux against this repo (requires GITLAB_TOKEN env var, api scope)
+bootstrap-flux: setup-prerequisites ## Bootstrap Flux against this repo (requires GITLAB_TOKEN env var, api scope)
 	@if [ -z "$$GITLAB_TOKEN" ]; then \
 		echo "Error: GITLAB_TOKEN is not set."; exit 1; \
 	fi
+	@$(MAKE) apply-test-secrets
 	@echo "Bootstrapping Flux ($(GIT_BRANCH) branch, path $(FLUX_PATH))..."
 	@$(FLUX) bootstrap gitlab \
 		--owner=$(GITLAB_OWNER) \
