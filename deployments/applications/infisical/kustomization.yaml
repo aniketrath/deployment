@@ -6,22 +6,6 @@ resources:
   - deployment.yaml
   - ingress.yaml
   - service.yaml
-
-patches:
-  - target:
-      kind: Ingress
-      name: infisical
-    patch: |-
-      - op: replace
-        path: /spec/rules/0/host
-        value: infisical.chimera-fence.ts.net
-      - op: replace
-        path: /spec/tls/0/hosts/0
-        value: infisical.chimera-fence.ts.net
-  - target:
-      kind: Deployment
-      name: infisical
-    patch: |-
-      - op: replace
-        path: /spec/template/spec/containers/0/env/0/value
-        value: "https://infisical.chimera-fence.ts.net"
+  - serviceaccount.yaml
+  - rbac.yaml
+  - script.hostname-discovery.yaml

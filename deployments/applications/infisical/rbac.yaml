@@ -1,0 +1,24 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: infisical-ingress-reader
+  namespace: applications
+rules:
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["ingresses"]
+    resourceNames: ["infisical"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: infisical-ingress-reader
+  namespace: applications
+subjects:
+  - kind: ServiceAccount
+    name: infisical-sa
+    namespace: applications
+roleRef:
+  kind: Role
+  name: infisical-ingress-reader
+  apiGroup: rbac.authorization.k8s.io

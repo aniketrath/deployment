@@ -1,19 +1,35 @@
 # Deployment Repo
 
-This repo is a small Kubernetes stack managed with GitOps.
-The simple version: Git says what should exist, and Argo CD makes the cluster match it.
+GitOps-managed Kubernetes stack for stackcraft. Git is the source of truth;
+**Flux CD** watches this repo and reconciles the cluster to match it.
 
-## What is in this repo
+## How it works
 
-This repo is not app code. It is deployment code.
+1. `flux bootstrap` installs Flux's controllers into the cluster and points
+   them at this repo (a specific branch + path under `clusters/`).
+2. Flux's own `flux-system` Kustomization watches `clusters/<env>/`, which
+   contains a set of Flux `Kustomization` objects — one per component.
+3. Each `Kustomization` object points at a folder under `deployments/`,
+   applies it into a target namespace, and can declare `dependsOn` so
+   components come up in the right order.
+4. `postBuild.substitute` lets the same manifest set under `deployments/`
+   be reused across environments with different values injected per cluster
+   (e.g. Infisical identity/project IDs, environment name).
 
-It sets up:
+### Reconciliation order (staging)
 
-- Argo CD itself
-- Kubernetes namespaces
-- shared infrastructure
-- self-hosted apps
-- Tailscale-based access
+```text
+namespaces
+├── infra-postgres ─────┐
+├── infra-redis ────────┼──> apps-infisical ───> apps-vaultwarden
+├── tailscale-operator ─┤
+└── infra-headlamp <────┘
+```
+
+Postgres, Redis, and the Tailscale operator come up first. Infisical depends
+on all three (it needs the DB and needs Tailscale ingress for its own
+hostname). Vaultwarden depends on Infisical, since it fetches its admin token
+from Infisical at startup. Headlamp depends on Infisical and Tailscale.
 
 ## Folder layout
 
@@ -22,125 +38,146 @@ It sets up:
 ├── .gitlab-ci.yml
 ├── .gitignore
 ├── .yamllint.yml
+├── .trivyignore.yaml
 ├── Makefile
 ├── kind-config.yaml
 ├── README.md
-├── bootstrap/
-│   └── argocd/
-│       ├── production/
-│       │   └── argocd.yaml
-│       ├── staging/
-│       │   └── argocd.yaml
-│       └── values.yaml
+├── clusters/
+│   ├── staging/
+│   │   ├── namespaces.yaml
+│   │   ├── infra-postgres.yaml
+│   │   ├── infra-redis.yaml
+│   │   ├── infra-headlamp.yaml
+│   │   ├── tailscale.yaml
+│   │   ├── apps-infisical.yaml
+│   │   ├── apps-vaultwarden.yaml
+│   │   └── flux-system/
+│   │       ├── gotk-components.yaml
+│   │       ├── gotk-sync.yaml
+│   │       └── kustomization.yaml
+│   └── production/
+│       └── (mirrors staging/, generated via `make bootstrap-flux`)
 ├── deployments/
-│   ├── applications/
+│   ├── applications/ [namespace]
 │   │   ├── infisical/
 │   │   │   ├── bootstrap.yaml
 │   │   │   ├── deployment.yaml
 │   │   │   ├── ingress.yaml
 │   │   │   ├── kustomization.yaml
-│   │   │   └── service.yaml
-│   │   └── vaultwarden/
-│   │       ├── deployment.yaml
-│   │       ├── ingress.yaml
-│   │       ├── kustomization.yaml
-│   │       ├── pvc.yaml
-│   │       └── service.yaml
-│   ├── infrastructure/
-│   │   ├── headlamp/
-│   │   │   ├── application.yaml
-│   │   │   ├── ingress.yaml
-│   │   │   ├── kustomization.yaml
 │   │   │   ├── rbac.yaml
-│   │   │   └── values.yaml
-│   │   ├── postgres/
-│   │   │   ├── deployment.yaml
-│   │   │   ├── pvc.yaml
-│   │   │   └── service.yaml
-│   │   └── redis/
-│   │       ├── deployment.yaml
-│   │       ├── pvc.yaml
-│   │       └── service.yaml
-│   └── tailscale/
-│       └── deployment.yaml
+│   │   │   ├── script.hostname-discovery.yaml
+│   │   │   ├── service.yaml
+│   │   │   └── serviceaccount.yaml
+│   │   └── vaultwarden/
+│   ├── infrastructure [namespace]
+│   └── tailscale/ [namespace]
+│       ├── helmrelease.yaml
+│       ├── helmrepository.yaml
+│       └── kustomization.yaml
 ├── namespaces/
 │   ├── applications.yaml
-│   ├── argocd.yaml
 │   ├── infrastructure.yaml
 │   └── tailscale.yaml
-└── testcreds/               # ignored for secrets, not part of real deployment docs
+└── scripts/
+    └── validate-flux-deps.py
 ```
-
-This is the actual repo shape. The important deployment folders are `bootstrap/`, `namespaces/`, and `deployments/`.
-
-## How it works
-
-1. `Makefile` is the main control file.
-   - creates namespaces
-   - installs prerequisites
-   - installs Argo CD
-   - deploys infrastructure
-   - checks status
-
-2. Argo CD is installed first.
-   - It watches the Git repo.
-   - It sees folders under `deployments/`.
-   - It creates app resources automatically from those folders.
-
-3. The repo uses ApplicationSet.
-   - It scans paths like `deployments/*/*`.
-   - It maps each folder to a namespace.
-   - Example:
-     - `deployments/applications/infisical` -> `applications`
-     - `deployments/infrastructure/postgres` -> `infrastructure`
-
-4. Sync waves control startup order.
-   - Wave 0: Tailscale + Postgres + Redis
-   - Wave 1: Infisical + DB bootstrap
-   - Wave 2: Headlamp + Vaultwarden
-
-This is important because Infisical needs the database already created before it starts.
 
 ## Main services
 
-### Infrastructure
-- Postgres: shared database in `infrastructure`
-- Redis: shared cache in `infrastructure`
-- Headlamp: Kubernetes dashboard in `infrastructure`
-- Tailscale operator: exposes services through Tailscale ingress
+### Infrastructure (`infrastructure` namespace)
 
-### Applications
-- Infisical: self-hosted secrets app
-- Vaultwarden: self-hosted password manager
+- **Postgres** — shared database for apps that need one.
+- **Redis** — shared cache.
+- **Headlamp** — Kubernetes dashboard, installed via HelmRelease, exposed
+  through Tailscale ingress with a scoped exec/node-shell RBAC role.
+- **Tailscale operator** — provides the `tailscale` IngressClass used by
+  every app/infra ingress in this repo instead of a public load balancer.
 
-Both are exposed through Tailscale-hosted ingress, not normal public internet load balancers.
+### Applications (`applications` namespace)
+
+- **Infisical** — self-hosted secrets manager. Ships with a `bootstrap.yaml`
+  Job that idempotently creates its Postgres role/database on first run.
+- **Vaultwarden** — self-hosted password manager (Bitwarden-compatible).
+  Fetches its own admin token from Infisical at pod startup via a
+  Kubernetes-auth login (no static secret ever stored in the cluster for
+  this token) — see `script.vaultwarden-bootstrap.yaml`.
+
+Both apps are reachable only over Tailscale, never the public internet.
+
+## Local production-network simulation
+
+`kind-config.yaml` keeps the three-node production-shaped topology and reserves
+the following addresses for an optional VIP simulation:
+
+- `192.168.1.230` — kube-vip control-plane VIP
+- `192.168.1.231-192.168.1.240` — MetalLB `LoadBalancer` Services
+
+Install MetalLB and apply its pool with:
+
+```sh
+make setup-kind-lb
+```
+
+These addresses must be reachable on the Docker/Kind network. A normal Kind
+Docker bridge does not advertise arbitrary `192.168.1.x` addresses onto the
+physical LAN, so use a LAN-attached Docker network (or change the pool to an
+unused subnet on the Docker bridge) before expecting clients outside Docker to
+reach a `LoadBalancer` Service. The API continues to bootstrap through
+`127.0.0.1:6443`; kube-vip can be layered on afterward when the Kind nodes share
+the VIP-capable L2 network.
+
+## Environments
+
+- **staging** — tracks the `staging` branch, path `clusters/staging`.
+- **production** — bootstrapped separately (`FLUX_PATH=clusters/production`,
+  its own branch). Deployed in the same dependency order as staging, with
+  Vaultwarden intentionally deployed last/after Infisical is confirmed
+  healthy, since it depends on Infisical being reachable.
+
+Per-environment values (Infisical identity ID, project ID, environment
+name, etc.) are **not** hardcoded into `deployments/`. They're injected per
+cluster via `postBuild.substitute` in each environment's
+`clusters/<env>/apps-vaultwarden.yaml` / `apps-infisical.yaml`.
 
 ## Secrets
 
-The manifests reference Kubernetes secrets such as:
+The manifests reference Kubernetes Secrets such as:
 
 - `clustercreds-postgres`
 - `clustercreds-infisical`
 - `headlamp-admin-token`
 
-Those secrets are expected to exist outside the repo. The repo does not contain the real secret values.
+These are expected to already exist in-cluster (created out-of-band, e.g.
+via Reflector or manually) — they are never committed to this repo.
 
-## CI
+## Makefile targets
 
-The project has GitLab CI checks for:
+Run `make help` for the full list. Highlights:
 
-- YAML lint
-- Kubernetes schema validation
-- Trivy security scan
+| Target | Description |
+|:---|:---|
+| `bootstrap-flux` | Bootstraps Flux against this repo (`GITLAB_TOKEN` required; override `FLUX_PATH`/`GIT_BRANCH` per environment) |
+| `setup-prerequisites` | Adds Helm repos, installs the Reflector controller |
+| `reconcile-<tier>` | Forces Flux to reconcile a specific Kustomization now, e.g. `make reconcile-apps-infisical` |
+| `status-flux` | Shows all Kustomizations, HelmReleases, and sources |
+| `status-headlamp` / `creds-headlamp` | Inspect Headlamp / fetch its admin token |
+| `test` | Runs all local CI checks: yamllint, kubeconform (K8s + Flux CRD schemas), `kubectl kustomize` build validation, Flux `dependsOn` graph validation, Trivy scan |
+| `clean` | Full teardown: uninstalls Flux, deletes managed namespaces, strips lingering finalizers |
+
+## CI (GitLab)
+
+Mirrors the local `make test` checks: YAML lint, Kubernetes/Flux CRD schema
+validation via kubeconform, Helm chart template validation for
+Helm-installed apps, and a Trivy security scan (with accepted-risk
+exceptions documented in `.trivyignore.yaml`).
 
 ## Bottom line
 
-This repo is basically:
-
-- install the platform tools
-- create the namespaces
-- let Argo CD watch Git
-- deploy database + cache + dashboard + apps
-- keep secrets out of Git
-
-Git is the source of truth, Argo CD is the robot, Kubernetes is the target, and this repo is the recipe for the whole stack.
+- Git is the source of truth.
+- Flux is the controller that watches it.
+- Each environment (`staging`, `production`) is its own branch/path
+  combination bootstrapped independently.
+- Dependency ordering (`dependsOn`) guarantees infra → Infisical →
+  Vaultwarden, so secrets exist before the apps that need them start.
+- Environment-specific values are injected at reconcile time via
+  `postBuild.substitute`, not hardcoded into shared manifests.

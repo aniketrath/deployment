@@ -6,9 +6,10 @@ config:
 serviceAccount:
   create: false
   name: headlamp-admin
+clusterRoleBinding:
+  create: true
+  clusterRoleName: view
 replicaCount: 1
-annotations:
-  argocd.argoproj.io/sync-wave: "2"
 resources:
   limits:
     cpu: 200m
@@ -37,3 +38,19 @@ pluginsManager:
     installOptions:
       parallel: true
       maxConcurrent: 2
+initContainers:
+  - name: headlamp-flux-plugin
+    image: ghcr.io/headlamp-k8s/headlamp-plugin-flux:latest
+    imagePullPolicy: Always
+    command:
+      - /bin/sh
+      - -c
+      - cp -r /plugins/* /headlamp-plugins-shared/
+    securityContext:
+      runAsNonRoot: false
+      privileged: false
+      runAsUser: 0
+      runAsGroup: 0
+    volumeMounts:
+      - name: plugins-dir
+        mountPath: /headlamp-plugins-shared

@@ -5,8 +5,6 @@ metadata:
   namespace: applications
   labels:
     app: vaultwarden
-  annotations:
-    argocd.argoproj.io/sync-wave: "2"
 spec:
   type: ClusterIP
   ports:

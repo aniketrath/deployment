@@ -3,8 +3,6 @@ kind: PersistentVolumeClaim
 metadata:
   name: redis-pvc
   namespace: infrastructure
-  annotations:
-    argocd.argoproj.io/sync-wave: "0"
 spec:
   accessModes:
     - ReadWriteOnce

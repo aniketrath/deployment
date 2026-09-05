@@ -16,29 +16,31 @@ variables:
       changes:
         - deployments/**/*
         - namespaces/**/*
-        - bootstrap/**/*
+        - clusters/**/*
+        - scripts/**/*
         - Makefile
         - .gitlab-ci.yml
         - kind-config.yaml
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
 
 # ------------------------------------------------------------------------------
-# 1. Syntax & Makefile Linting
+# 1. YAML Syntax & Makefile Linting
 # ------------------------------------------------------------------------------
 lint:syntax:
   extends: .app_change_rules
   stage: lint
-  image: alpine:latest
+  image: python:3.12-alpine
   before_script:
-    - apk add --no-cache yamllint make
+    - apk add --no-cache make
+    - pip install --no-cache-dir yamllint
   script:
     - echo "==> Checking YAML syntax..."
-    - yamllint deployments/ namespaces/ bootstrap/
+    - yamllint deployments/ namespaces/ clusters/
     - echo "==> Dry-running Makefile targets..."
     - make -n help
 
 # ------------------------------------------------------------------------------
-# 2. Kubernetes Schema Validation
+# 2. Kubernetes and Flux Schema Validation
 # ------------------------------------------------------------------------------
 validate:k8s-schemas:
   extends: .app_change_rules
@@ -47,11 +49,40 @@ validate:k8s-schemas:
     name: ghcr.io/yannh/kubeconform:v0.6.7-alpine
     entrypoint: [""]
   script:
-    - echo "==> Validating Kubernetes manifests against official K8s schemas..."
-    - 'find deployments/ namespaces/ -type f \( -name "*.yaml" -o -name "*.yml" \) ! -name "*values*" -print0 | xargs -0 /kubeconform -summary -strict -ignore-missing-schemas'
+    - echo "==> Validating Kubernetes and Flux manifests against schemas..."
+    - mkdir -p .cache/kubeconform
+    - >-
+      find deployments/ namespaces/ clusters/ -type f
+      \( -name "*.yaml" -o -name "*.yml" \)
+      ! -name "*values*" ! -iname "Chart.yaml"
+      ! -iname "kustomization.yaml" ! -name "gotk-components.yaml"
+      -print0 | xargs -0 /kubeconform -summary -strict
+      -cache .cache/kubeconform
+      -schema-location default
+      -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json'
+
+validate:flux:
+  extends: .app_change_rules
+  stage: validate
+  image: python:3.12-alpine
+  before_script:
+    - apk add --no-cache kubectl
+    - pip install --no-cache-dir PyYAML
+  script:
+    - echo "==> Validating Flux kustomize builds and dependency graph..."
+    - |
+      found=0
+      for kfile in $(find deployments/ -name kustomization.yaml); do
+        dir=$(dirname "$kfile")
+        echo "--> $dir"
+        kubectl kustomize "$dir" > /dev/null
+        found=$((found + 1))
+      done
+      echo "    ($found kustomization path(s) built OK)"
+    - python3 scripts/validate-flux-deps.py
 
 # ------------------------------------------------------------------------------
-# 3. Dynamic Helm Values Auto-Discovery
+# 3. Dynamic Helm Values Validation
 # ------------------------------------------------------------------------------
 validate:helm-charts:
   extends: .app_change_rules
@@ -65,7 +96,7 @@ validate:helm-charts:
       helm repo add headlamp https://kubernetes-sigs.github.io/headlamp/ --force-update
       helm repo update
 
-      for dir in deployments/applications/*; do
+      for dir in deployments/infrastructure/*; do
         if [ -d "$dir" ] && [ -f "$dir/values.yaml" ]; then
           app=$(basename "$dir")
           echo "--> Validating Helm release config for: $app"
