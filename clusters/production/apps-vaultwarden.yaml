@@ -1,0 +1,31 @@
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: apps-vaultwarden
+  namespace: flux-system
+spec:
+  dependsOn:
+    - name: infra-postgres
+    - name: infra-redis
+    - name: apps-infisical
+    - name: tailscale-operator
+  interval: 10m
+  path: ./deployments/applications/vaultwarden
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  targetNamespace: applications
+  wait: true
+  timeout: 5m
+  postBuild:
+    substitute:
+      infisical_identity_id: "1c56ab0f-6af0-49e0-af46-d22d3cc3b7c4"
+      infisical_project_id: "f785167c-2037-4317-a7d3-51b9e5739609"
+      infisical_environment: "production"
+      vault_admin_token_secret_name: "VAULT_ADMIN_TOKEN"
+  healthChecks:
+    - apiVersion: apps/v1
+      kind: Deployment
+      name: vaultwarden
+      namespace: applications
