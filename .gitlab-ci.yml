@@ -50,6 +50,7 @@ validate:k8s-schemas:
     entrypoint: [""]
   script:
     - echo "==> Validating Kubernetes and Flux manifests against schemas..."
+    - mkdir -p .cache/kubeconform
     - >-
       find deployments/ namespaces/ clusters/ -type f
       \( -name "*.yaml" -o -name "*.yml" \)
@@ -65,7 +66,8 @@ validate:flux:
   stage: validate
   image: python:3.12-alpine
   before_script:
-    - apk add --no-cache kubectl py3-yaml
+    - apk add --no-cache kubectl
+    - pip install --no-cache-dir PyYAML
   script:
     - echo "==> Validating Flux kustomize builds and dependency graph..."
     - |
