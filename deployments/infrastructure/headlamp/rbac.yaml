@@ -5,77 +5,16 @@ metadata:
   namespace: infrastructure
 ---
 apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
-metadata:
-  name: headlamp-exec
-rules:
-  - apiGroups: [""]
-    resources: ["pods"]
-    verbs: ["get", "list", "watch", "create", "delete"]
-  - apiGroups: [""]
-    resources: ["pods/exec", "pods/attach", "pods/portforward"]
-    verbs: ["create", "get"]
-  - apiGroups: [""]
-    resources: ["pods/ephemeralcontainers"]
-    verbs: ["update"]
-  - apiGroups: [""]
-    resources: ["nodes"]
-    verbs: ["get", "list", "watch"]
-  - apiGroups: [""]
-    resources: ["nodes/proxy"]
-    verbs: ["get", "create"]
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
-metadata:
-  name: headlamp-view-metallb
-rules:
-  - apiGroups: ["metallb.io"]
-    resources:
-      - ipaddresspools
-      - l2advertisements
-      - bgppeers
-      - bgpadvertisements
-      - communities
-    verbs: ["get", "list", "watch"]
----
-apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: headlamp-admin-view-binding
+  name: headlamp-admin-cluster-admin-binding
 subjects:
   - kind: ServiceAccount
     name: headlamp-admin
     namespace: infrastructure
 roleRef:
   kind: ClusterRole
-  name: view
-  apiGroup: rbac.authorization.k8s.io
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
-metadata:
-  name: headlamp-admin-exec-binding
-subjects:
-  - kind: ServiceAccount
-    name: headlamp-admin
-    namespace: infrastructure
-roleRef:
-  kind: ClusterRole
-  name: headlamp-exec
-  apiGroup: rbac.authorization.k8s.io
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
-metadata:
-  name: headlamp-admin-metallb-binding
-subjects:
-  - kind: ServiceAccount
-    name: headlamp-admin
-    namespace: infrastructure
-roleRef:
-  kind: ClusterRole
-  name: headlamp-view-metallb
+  name: cluster-admin
   apiGroup: rbac.authorization.k8s.io
 ---
 apiVersion: v1
