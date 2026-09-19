@@ -31,7 +31,7 @@ spec:
       host: postgres.infrastructure.svc.cluster.local
       port: 5432
       name: "n8n"
-      user: "${n8n_postgres_user}"
+      user: "${POSTGRES_USER}"
       passwordSecret:
         name: clustercreds-postgres
         key: POSTGRES_PASSWORD
@@ -47,16 +47,14 @@ spec:
     ingress:
       enabled: true
       className: tailscale
-      annotations:
-        tailscale.com/hostname: "${n8n_tailscale_hostname}"
       hosts:
-        - host: "${n8n_tailscale_hostname}"
+        - host: n8n
           paths:
             - path: /
               pathType: Prefix
       tls:
         - hosts:
-            - "${n8n_tailscale_hostname}"
+            - n8n
           secretName: n8n-tls-cert
 
     persistence:

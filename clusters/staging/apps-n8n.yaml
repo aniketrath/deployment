@@ -19,6 +19,9 @@ spec:
   wait: true
   timeout: 10m
   postBuild:
+    substituteFrom:
+      - kind: Secret
+        name: clustercreds-postgres
     substitute:
       n8n_infisical_identity_id: "6addfaa1-a1a3-4c08-9961-476e2dc723d1"
       n8n_infisical_project_id: "5f6f8914-872b-46bb-b0c1-1ce5352c8b6f"
