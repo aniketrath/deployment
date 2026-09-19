@@ -40,7 +40,7 @@ spec:
               mountPath: /scripts
       containers:
         - name: infisical
-          image: infisical/infisical:latest-postgres
+          image: infisical/infisical:v0.165.9
           imagePullPolicy: IfNotPresent
           command: ["sh", "-c"]
           args:
