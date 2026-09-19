@@ -8,7 +8,7 @@ spec:
   chart:
     spec:
       chart: n8n
-      version: ">=2.0.0 <3.0.0"
+      version: ">=1.0.0 <2.0.0"
       sourceRef:
         kind: HelmRepository
         name: n8n
@@ -21,10 +21,28 @@ spec:
       retries: 3
   values:
     image:
-      # Pinned to the last 1.x line. The chart's default tag now tracks n8n 2.x,
-      # which ships a distroless image and needs a separate n8nio/runners sidecar
-      # for Code nodes — not wired up here. Revisit deliberately, not by accident.
-      tag: "1.123.75"
+      tag: "1.110.1"
+
+    secretRefs:
+      existingSecret: n8n-secrets
+
+    database:
+      type: postgresdb
+      host: postgres.infrastructure.svc.cluster.local
+      port: 5432
+      name: "n8n"
+      user: "${n8n_postgres_user}"
+      passwordSecret:
+        name: clustercreds-postgres
+        key: POSTGRES_PASSWORD
+
+    redis:
+      host: redis.infrastructure.svc.cluster.local
+      port: 6379
+
+    queueMode:
+      workerReplicaCount: 1
+      workerConcurrency: 10
 
     ingress:
       enabled: true
@@ -41,49 +59,6 @@ spec:
             - "${n8n_tailscale_hostname}"
           secretName: n8n-tls-cert
 
-    main:
-      serviceAccount:
-        create: true
-        name: n8n-sa
-
-      persistence:
-        enabled: true
-        type: dynamic
-        accessModes:
-          - ReadWriteOnce
-        size: 5Gi
-
-      extraEnv:
-        N8N_HOST:
-          value: "${n8n_webhook_host}"
-        N8N_PROTOCOL:
-          value: "https"
-        N8N_PORT:
-          value: "5678"
-        N8N_PROXY_HOPS:
-          value: "1"
-        WEBHOOK_URL:
-          value: "https://${n8n_webhook_host}/"
-        DB_TYPE:
-          value: "postgresdb"
-        DB_POSTGRESDB_HOST:
-          value: "postgres.infrastructure.svc.cluster.local"
-        DB_POSTGRESDB_PORT:
-          value: "5432"
-        DB_POSTGRESDB_DATABASE:
-          value: "n8n"
-        DB_POSTGRESDB_USER:
-          valueFrom:
-            secretKeyRef:
-              name: clustercreds-postgres
-              key: POSTGRES_USER
-        DB_POSTGRESDB_PASSWORD:
-          valueFrom:
-            secretKeyRef:
-              name: clustercreds-postgres
-              key: POSTGRES_PASSWORD
-        N8N_ENCRYPTION_KEY:
-          valueFrom:
-            secretKeyRef:
-              name: n8n-secrets
-              key: N8N_ENCRYPTION_KEY
+    persistence:
+      enabled: true
+      size: 5Gi

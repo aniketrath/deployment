@@ -5,4 +5,5 @@ metadata:
   namespace: applications
 spec:
   interval: 1h
-  url: https://8gears.github.io/n8n-helm-chart/
+  type: oci
+  url: oci://ghcr.io/n8n-io/n8n-helm-chart
