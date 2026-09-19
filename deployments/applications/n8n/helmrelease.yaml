@@ -1,0 +1,89 @@
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: n8n
+  namespace: applications
+spec:
+  interval: 10m
+  chart:
+    spec:
+      chart: n8n
+      version: ">=2.0.0 <3.0.0"
+      sourceRef:
+        kind: HelmRepository
+        name: n8n
+        namespace: applications
+  install:
+    remediation:
+      retries: 3
+  upgrade:
+    remediation:
+      retries: 3
+  values:
+    image:
+      # Pinned to the last 1.x line. The chart's default tag now tracks n8n 2.x,
+      # which ships a distroless image and needs a separate n8nio/runners sidecar
+      # for Code nodes — not wired up here. Revisit deliberately, not by accident.
+      tag: "1.123.75"
+
+    ingress:
+      enabled: true
+      className: tailscale
+      annotations:
+        tailscale.com/hostname: "${n8n_tailscale_hostname}"
+      hosts:
+        - host: "${n8n_tailscale_hostname}"
+          paths:
+            - path: /
+              pathType: Prefix
+      tls:
+        - hosts:
+            - "${n8n_tailscale_hostname}"
+          secretName: n8n-tls-cert
+
+    main:
+      serviceAccount:
+        create: true
+        name: n8n-sa
+
+      persistence:
+        enabled: true
+        type: dynamic
+        accessModes:
+          - ReadWriteOnce
+        size: 5Gi
+
+      extraEnv:
+        N8N_HOST:
+          value: "${n8n_webhook_host}"
+        N8N_PROTOCOL:
+          value: "https"
+        N8N_PORT:
+          value: "5678"
+        N8N_PROXY_HOPS:
+          value: "1"
+        WEBHOOK_URL:
+          value: "https://${n8n_webhook_host}/"
+        DB_TYPE:
+          value: "postgresdb"
+        DB_POSTGRESDB_HOST:
+          value: "postgres.infrastructure.svc.cluster.local"
+        DB_POSTGRESDB_PORT:
+          value: "5432"
+        DB_POSTGRESDB_DATABASE:
+          value: "n8n"
+        DB_POSTGRESDB_USER:
+          valueFrom:
+            secretKeyRef:
+              name: clustercreds-postgres
+              key: POSTGRES_USER
+        DB_POSTGRESDB_PASSWORD:
+          valueFrom:
+            secretKeyRef:
+              name: clustercreds-postgres
+              key: POSTGRES_PASSWORD
+        N8N_ENCRYPTION_KEY:
+          valueFrom:
+            secretKeyRef:
+              name: n8n-secrets
+              key: N8N_ENCRYPTION_KEY

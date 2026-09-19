@@ -1,0 +1,18 @@
+apiVersion: secrets.infisical.com/v1beta1
+kind: InfisicalAuth
+metadata:
+  name: n8n-infisical-auth
+  namespace: applications
+spec:
+  infisicalConnectionRef:
+    name: n8n-infisical-connection
+    namespace: applications
+  method: kubernetes
+  kubernetes:
+    identityIdRef:
+      name: n8n-infisical-identity
+      namespace: applications
+      key: identityId
+    serviceAccountRef:
+      name: n8n-sa
+      namespace: applications
