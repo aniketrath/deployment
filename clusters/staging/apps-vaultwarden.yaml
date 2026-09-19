@@ -20,8 +20,8 @@ spec:
   timeout: 5m
   postBuild:
     substitute:
-      infisical_identity_id: "96607a77-097d-4ea3-89c5-982094fb5566"
-      infisical_project_id: "7739441b-3258-4ea9-90e0-70565cc57dab"
+      infisical_identity_id: "bb87b166-71c7-4111-af03-d0ef0f83016f"
+      infisical_project_id: "5f6f8914-872b-46bb-b0c1-1ce5352c8b6f"
       infisical_environment: "staging"
       vault_admin_token_secret_name: "VAULT_ADMIN_TOKEN"
   healthChecks:
