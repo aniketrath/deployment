@@ -1,0 +1,27 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: vaultwarden-hostname-discovery
+  namespace: applications
+data:
+  discover.sh: |
+    #!/bin/sh
+    set -eu
+    TOKEN="$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)"
+    K8S_API="https://kubernetes.default.svc"
+    MAX_RETRIES=90
+    SLEEP_SECONDS=2
+    i=0
+    while [ "$i" -lt "$MAX_RETRIES" ]; do
+      RESPONSE="$(curl -s -k -H "Authorization: Bearer ${TOKEN}" "${K8S_API}/apis/networking.k8s.io/v1/namespaces/applications/ingresses/vaultwarden")"
+      HOSTNAME="$(echo "$RESPONSE" | grep -o '"hostname":[[:space:]]*"[^"]*"' | head -n1 | cut -d'"' -f4)"
+      if [ -n "$HOSTNAME" ]; then
+        echo "$HOSTNAME" > /shared/domain
+        echo "Resolved hostname: $HOSTNAME"
+        exit 0
+      fi
+      i=$((i+1))
+      sleep "$SLEEP_SECONDS"
+    done
+    echo "ERROR: Failed to resolve vaultwarden Ingress hostname after $((MAX_RETRIES * SLEEP_SECONDS))s" >&2
+    exit 1

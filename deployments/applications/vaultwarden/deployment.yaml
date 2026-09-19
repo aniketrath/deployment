@@ -24,18 +24,9 @@ spec:
         seccompProfile:
           type: RuntimeDefault
       initContainers:
-        - name: bootstrap
+        - name: hostname-discovery
           image: curlimages/curl:latest
-          command: ["/bin/sh", "/scripts/bootstrap.sh"]
-          env:
-            - name: INFISICAL_IDENTITY_ID
-              value: "${infisical_identity_id}"
-            - name: INFISICAL_PROJECT_ID
-              value: "${infisical_project_id}"
-            - name: INFISICAL_ENVIRONMENT
-              value: "${infisical_environment}"
-            - name: VAULT_ADMIN_TOKEN_SECRET_NAME
-              value: "${vault_admin_token_secret_name}"
+          command: ["/bin/sh", "/scripts/discover.sh"]
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
@@ -45,7 +36,7 @@ spec:
           volumeMounts:
             - name: shared
               mountPath: /shared
-            - name: bootstrap-script
+            - name: discovery-script
               mountPath: /scripts
       containers:
         - name: vaultwarden
@@ -55,7 +46,6 @@ spec:
           args:
             - |
               export DOMAIN="https://$(cat /shared/domain)"
-              export ADMIN_TOKEN="$(cat /shared/admin_token)"
               exec /start.sh
           securityContext:
             allowPrivilegeEscalation: false
@@ -70,6 +60,11 @@ spec:
               value: "true"
             - name: DATA_FOLDER
               value: "/data"
+            - name: ADMIN_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: vaultwarden-secrets
+                  key: VAULT_ADMIN_TOKEN
           ports:
             - name: http
               containerPort: 80
@@ -90,7 +85,7 @@ spec:
           emptyDir: {}
         - name: shared
           emptyDir: {}
-        - name: bootstrap-script
+        - name: discovery-script
           configMap:
-            name: vaultwarden-bootstrap-script
+            name: vaultwarden-hostname-discovery
             defaultMode: 0555
