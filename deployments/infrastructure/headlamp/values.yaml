@@ -19,7 +19,7 @@ resources:
     memory: 128Mi
 podLabels:
   chaos-monkey/target: "true"
-  chaos-monkey/action: "mark-only"
+  chaos-monkey/action: "delete"
 replicaCount: 2
 pluginsManager:
   enabled: true
