@@ -17,6 +17,9 @@ resources:
   requests:
     cpu: 50m
     memory: 128Mi
+podLabels:
+  chaos-monkey/target: "true"
+  chaos-monkey/action: "mark-only"
 pluginsManager:
   enabled: true
   baseImage: node:lts-alpine
