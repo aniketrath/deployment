@@ -13,7 +13,7 @@ data:
     SLEEP_SECONDS=2
     i=0
     while [ "$i" -lt "$MAX_RETRIES" ]; do
-      RESPONSE="$(curl -s -k -H "Authorization: Bearer ${TOKEN}" "${K8S_API}/apis/networking.k8s.io/v1/namespaces/applications/ingresses/vaultwarden")"
+      RESPONSE="$(curl -s -k -H "Authorization: Bearer $${TOKEN}" "$${K8S_API}/apis/networking.k8s.io/v1/namespaces/applications/ingresses/vaultwarden")"
       HOSTNAME="$(echo "$RESPONSE" | grep -o '"hostname":[[:space:]]*"[^"]*"' | head -n1 | cut -d'"' -f4)"
       if [ -n "$HOSTNAME" ]; then
         echo "$HOSTNAME" > /shared/domain
