@@ -1,0 +1,7 @@
+apiVersion: secrets.infisical.com/v1beta1
+kind: InfisicalConnection
+metadata:
+  name: vaultwarden-infisical-connection
+  namespace: applications
+spec:
+  address: http://infisical.applications.svc.cluster.local

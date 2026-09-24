@@ -1,0 +1,40 @@
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: apps-n8n
+  namespace: flux-system
+spec:
+  dependsOn:
+    - name: infra-postgres
+    - name: apps-infisical
+    - name: infra-infisical-operator
+    - name: tailscale-operator
+  interval: 10m
+  path: ./deployments/applications/n8n
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  targetNamespace: applications
+  wait: true
+  timeout: 10m
+  postBuild:
+    substituteFrom:
+      - kind: Secret
+        name: clustercreds-postgres
+    substitute:
+      n8n_infisical_identity_id: "6addfaa1-a1a3-4c08-9961-476e2dc723d1"
+      n8n_infisical_project_id: "5f6f8914-872b-46bb-b0c1-1ce5352c8b6f"
+      n8n_infisical_environment: "staging"
+      n8n_infisical_secret_path: "/"
+      n8n_tailscale_hostname: "n8n"
+      n8n_webhook_host: "https://n8n.perch-humboldt.ts.net"
+  healthChecks:
+    - apiVersion: helm.toolkit.fluxcd.io/v2
+      kind: HelmRelease
+      name: n8n
+      namespace: applications
+    - apiVersion: batch/v1
+      kind: Job
+      name: n8n-db-init
+      namespace: applications

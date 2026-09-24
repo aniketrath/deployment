@@ -1,0 +1,68 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: n8n-db-init
+  namespace: applications
+  annotations:
+    kustomize.toolkit.fluxcd.io/force: "true"
+spec:
+  template:
+    metadata:
+      name: n8n-db-init
+    spec:
+      restartPolicy: OnFailure
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999
+        runAsGroup: 999
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: psql-bootstrap
+          image: postgres:15-alpine
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          env:
+            - name: PGUSER
+              valueFrom:
+                secretKeyRef:
+                  name: clustercreds-postgres
+                  key: POSTGRES_USER
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: clustercreds-postgres
+                  key: POSTGRES_PASSWORD
+            - name: PGHOST
+              value: postgres.infrastructure.svc.cluster.local
+            - name: N8N_DB_NAME
+              value: "n8n"
+            - name: N8N_DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: clustercreds-postgres
+                  key: POSTGRES_USER
+          command:
+            - "sh"
+            - "-c"
+            - |
+              set -e
+              echo "Ensuring n8n database exists..."
+              DB_EXISTS=$(psql -v ON_ERROR_STOP=1 -tc "SELECT 1 FROM pg_database WHERE datname = '$N8N_DB_NAME'" | tr -d '[:space:]')
+              if [ "$DB_EXISTS" != "1" ]; then
+                echo "Creating database $N8N_DB_NAME..."
+                psql -v ON_ERROR_STOP=1 -c "CREATE DATABASE \"$N8N_DB_NAME\" OWNER \"$N8N_DB_USER\""
+              else
+                echo "Database $N8N_DB_NAME already exists."
+              fi
+              echo "n8n database bootstrap complete."
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}

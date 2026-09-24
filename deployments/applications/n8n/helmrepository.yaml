@@ -1,0 +1,9 @@
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: HelmRepository
+metadata:
+  name: n8n
+  namespace: applications
+spec:
+  interval: 1h
+  type: oci
+  url: oci://ghcr.io/n8n-io/n8n-helm-chart

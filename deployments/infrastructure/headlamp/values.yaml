@@ -9,7 +9,6 @@ serviceAccount:
 clusterRoleBinding:
   create: true
   clusterRoleName: view
-replicaCount: 1
 resources:
   limits:
     cpu: 200m
@@ -17,6 +16,10 @@ resources:
   requests:
     cpu: 50m
     memory: 128Mi
+podLabels:
+  chaos-monkey/target: "true"
+  chaos-monkey/action: "delete"
+replicaCount: 2
 pluginsManager:
   enabled: true
   baseImage: node:lts-alpine

@@ -1,0 +1,18 @@
+apiVersion: secrets.infisical.com/v1beta1
+kind: InfisicalAuth
+metadata:
+  name: vaultwarden-infisical-auth
+  namespace: applications
+spec:
+  infisicalConnectionRef:
+    name: vaultwarden-infisical-connection
+    namespace: applications
+  method: kubernetes
+  kubernetes:
+    identityIdRef:
+      name: vaultwarden-infisical-identity
+      namespace: applications
+      key: identityId
+    serviceAccountRef:
+      name: vaultwarden-sa
+      namespace: applications

@@ -8,4 +8,8 @@ resources:
   - service.yaml
   - serviceaccount.yaml
   - rbac.yaml
-  - script.vaultwarden-bootstrap.yaml
+  - script.vaultwarden-hostname-discovery.yaml
+  - infisical-identity-secret.yaml
+  - infisical-connection.yaml
+  - infisical-auth.yaml
+  - infisical-staticsecret.yaml
