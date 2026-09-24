@@ -9,7 +9,6 @@ serviceAccount:
 clusterRoleBinding:
   create: true
   clusterRoleName: view
-replicaCount: 1
 resources:
   limits:
     cpu: 200m
