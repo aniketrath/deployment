@@ -1,0 +1,62 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: immich-db-init
+  namespace: applications
+  annotations:
+    kustomize.toolkit.fluxcd.io/force: "true"
+spec:
+  template:
+    metadata:
+      name: immich-db-init
+    spec:
+      restartPolicy: OnFailure
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999
+        runAsGroup: 999
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: psql-bootstrap
+          image: postgres:16-alpine
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          env:
+            - name: PGUSER
+              valueFrom:
+                secretKeyRef:
+                  name: clustercreds-postgres
+                  key: POSTGRES_USER
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: clustercreds-postgres
+                  key: POSTGRES_PASSWORD
+            - name: PGHOST
+              value: postgres.infrastructure.svc.cluster.local
+          command:
+            - sh
+            - -c
+            - |
+              set -eu
+              echo "Ensuring Immich database exists..."
+              DB_EXISTS=$(psql -v ON_ERROR_STOP=1 -tc "SELECT 1 FROM pg_database WHERE datname = 'immich'" | tr -d '[:space:]')
+              if [ "$DB_EXISTS" != "1" ]; then
+                echo "Creating database immich..."
+                psql -v ON_ERROR_STOP=1 -c "CREATE DATABASE immich OWNER \"$PGUSER\""
+              else
+                echo "Database immich already exists."
+              fi
+              echo "Immich database bootstrap complete."
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}

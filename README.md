@@ -22,14 +22,15 @@ GitOps-managed Kubernetes stack for stackcraft. Git is the source of truth;
 namespaces
 ├── infra-postgres ─────┐
 ├── infra-redis ────────┼──> apps-infisical ───> apps-vaultwarden
-├── tailscale-operator ─┤
+├── tailscale-operator ─┼──> apps-immich
 └── infra-headlamp <────┘
 ```
 
 Postgres, Redis, and the Tailscale operator come up first. Infisical depends
 on all three (it needs the DB and needs Tailscale ingress for its own
 hostname). Vaultwarden depends on Infisical, since it fetches its admin token
-from Infisical at startup. Headlamp depends on Infisical and Tailscale.
+from Infisical at startup. Immich depends on Postgres, Redis, and Tailscale.
+Headlamp depends on Infisical and Tailscale.
 
 ## Folder layout
 
@@ -69,6 +70,14 @@ from Infisical at startup. Headlamp depends on Infisical and Tailscale.
 │   │   │   ├── service.yaml
 │   │   │   └── serviceaccount.yaml
 │   │   └── vaultwarden/
+│   │   └── immich/
+│   │       ├── db-init.yaml
+│   │       ├── deployment.yaml
+│   │       ├── ingress.yaml
+│   │       ├── kustomization.yaml
+│   │       ├── machine-learning-deployment.yaml
+│   │       ├── pvc.yaml
+│   │       └── service.yaml
 │   ├── infrastructure [namespace]
 │   └── tailscale/ [namespace]
 │       ├── helmrelease.yaml
@@ -101,8 +110,12 @@ from Infisical at startup. Headlamp depends on Infisical and Tailscale.
   Fetches its own admin token from Infisical at pod startup via a
   Kubernetes-auth login (no static secret ever stored in the cluster for
   this token) — see `script.vaultwarden-bootstrap.yaml`.
+- **Immich** — self-hosted photo and video management. Uses the shared
+  PostgreSQL and Redis services, stores its media library on a persistent
+  volume (5 GiB in staging, 60 GiB in production), and is exposed over
+  Tailscale.
 
-Both apps are reachable only over Tailscale, never the public internet.
+All applications are reachable only over Tailscale, never the public internet.
 
 ## Local production-network simulation
 
