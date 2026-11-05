@@ -23,14 +23,25 @@ namespaces
 ├── infra-postgres ─────┐
 ├── infra-redis ────────┼──> apps-infisical ───> apps-vaultwarden
 ├── tailscale-operator ─┼──> apps-immich
-└── infra-headlamp <────┘
+├── infra-cert-manager
+├── infra-kubescape
+├── infra-kyverno
+├── infra-prometheus ────> infra-headlamp
+└── infra-headlamp <─────┘
 ```
 
 Postgres, Redis, and the Tailscale operator come up first. Infisical depends
 on all three (it needs the DB and needs Tailscale ingress for its own
 hostname). Vaultwarden depends on Infisical, since it fetches its admin token
 from Infisical at startup. Immich depends on Postgres, Redis, and Tailscale.
-Headlamp depends on Infisical and Tailscale.
+Headlamp depends on Infisical, Prometheus, and Tailscale. cert-manager,
+Kubescape, and Kyverno are independent cluster infrastructure services.
+Kubescape enables continuous configuration and image-vulnerability scans,
+but leaves node and runtime scanning disabled by default. Kyverno is installed
+without any policy resources, so it will not block workloads; audit reports
+require adding policies explicitly configured with `failureAction: Audit`.
+Prometheus supplies seven days of local metric history to the Headlamp
+Prometheus plugin; Grafana and Alertmanager are not installed.
 
 ## Folder layout
 
@@ -78,7 +89,11 @@ Headlamp depends on Infisical and Tailscale.
 │   │       ├── machine-learning-deployment.yaml
 │   │       ├── pvc.yaml
 │   │       └── service.yaml
-│   ├── infrastructure [namespace]
+│   ├── infrastructure/ [namespace]
+│   │   ├── cert-manager/ — certificate lifecycle controller and CRDs
+│   │   ├── kubescape/ — continuous Kubernetes configuration and image scanning
+│   │   ├── kyverno/ — Kubernetes policy engine; no policies installed by default
+│   │   └── prometheus/ — single Prometheus server, kube-state-metrics, and node-exporter
 │   └── tailscale/ [namespace]
 │       ├── helmrelease.yaml
 │       ├── helmrepository.yaml
@@ -98,7 +113,28 @@ Headlamp depends on Infisical and Tailscale.
 - **Postgres** — shared database for apps that need one.
 - **Redis** — shared cache.
 - **Headlamp** — Kubernetes dashboard, installed via HelmRelease, exposed
-  through Tailscale ingress with a scoped exec/node-shell RBAC role.
+  through Tailscale ingress with a scoped exec/node-shell RBAC role. Includes
+  the Flux and Prometheus plugins.
+- **Prometheus** — one server per cluster, with persistent 4 GiB storage,
+  seven-day retention, kube-state-metrics, and node-exporter. It also scrapes
+  kubelet/cAdvisor metrics for pod CPU, memory, network, and filesystem charts.
+  Grafana, Alertmanager, and Pushgateway are disabled. The Headlamp Prometheus
+  plugin auto-discovers the service; after deployment, enable metrics under
+  Headlamp Settings → Plugins → Prometheus for the selected cluster.
+- **cert-manager** — certificate lifecycle controller, installed via its
+  official OCI Helm chart. Issuers and certificate policies are configured
+  separately for each cluster. This installs the controller in Kubernetes;
+  it does not add packages to the NixOS host.
+- **Kubescape** — continuous Kubernetes configuration and image-vulnerability
+  scanning, surfaced through the Headlamp plugin. Persistent storage requires
+  a default StorageClass and at least 5 GiB of available capacity. Node and
+  runtime detections are disabled in the initial configuration (image SBOM
+  generation remains enabled for vulnerability reporting); this installs the
+  operator in Kubernetes, not on the NixOS host.
+- **Kyverno** — Kubernetes policy engine with its Headlamp plugin for viewing
+  policies, reports, and violations. The initial install includes no policy
+  resources, so it cannot block workloads; add policies explicitly in audit
+  mode before considering enforcement.
 - **Tailscale operator** — provides the `tailscale` IngressClass used by
   every app/infra ingress in this repo instead of a public load balancer.
 
