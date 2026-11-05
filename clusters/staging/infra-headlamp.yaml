@@ -6,6 +6,7 @@ metadata:
 spec:
   dependsOn:
     - name: apps-infisical
+    - name: infra-prometheus
     - name: tailscale-operator
   interval: 10m
   path: ./deployments/infrastructure/headlamp
