@@ -142,9 +142,13 @@ Prometheus plugin; Grafana and Alertmanager are not installed.
   receive node-agent relevancy filtering. This installs the operator in
   Kubernetes, not on the NixOS host.
 - **Kyverno** — Kubernetes policy engine with its Headlamp plugin for viewing
-  policies, reports, and violations. The initial install includes no policy
-  resources, so it cannot block workloads; add policies explicitly in audit
-  mode before considering enforcement.
+  policies, reports, and violations. The audit-only policies in
+  `deployments/infrastructure/kyverno/policies/` inspect application Pods for
+  privileged containers, Pod-level non-root configuration, CPU/memory
+  requests, mutable `latest` tags, missing health probes, and host access.
+  They report findings without blocking deployments. Host access reports may
+  include legitimate uses that should be reviewed before considering
+  enforcement.
 - **Tailscale operator** — provides the `tailscale` IngressClass used by
   every app/infra ingress in this repo instead of a public load balancer.
 

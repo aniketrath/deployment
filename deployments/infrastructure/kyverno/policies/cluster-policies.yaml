@@ -1,0 +1,214 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: disallow-privileged-containers
+  annotations:
+    policies.kyverno.io/title: Disallow Privileged Containers
+    policies.kyverno.io/category: Pod Security
+    policies.kyverno.io/severity: medium
+    policies.kyverno.io/description: Privileged application containers bypass important container isolation controls.
+spec:
+  validationFailureAction: Audit
+  background: true
+  rules:
+    - name: check-container-privilege
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+              namespaces:
+                - applications
+      validate:
+        message: Privileged containers are not allowed in the applications namespace.
+        foreach:
+          - list: request.object.spec.containers[]
+            deny:
+              conditions:
+                any:
+                  - key: "{{ element.securityContext.privileged || `false` }}"
+                    operator: Equals
+                    value: true
+          - list: request.object.spec.initContainers[]
+            deny:
+              conditions:
+                any:
+                  - key: "{{ element.securityContext.privileged || `false` }}"
+                    operator: Equals
+                    value: true
+---
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-pod-run-as-non-root
+  annotations:
+    policies.kyverno.io/title: Require Pod-Level Non-Root Setting
+    policies.kyverno.io/category: Pod Security
+    policies.kyverno.io/severity: medium
+    policies.kyverno.io/description: Application Pods should set runAsNonRoot true in their Pod security context.
+spec:
+  validationFailureAction: Audit
+  background: true
+  rules:
+    - name: check-run-as-non-root
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+              namespaces:
+                - applications
+      validate:
+        message: Set spec.securityContext.runAsNonRoot to true for application Pods.
+        pattern:
+          spec:
+            securityContext:
+              runAsNonRoot: true
+---
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-cpu-memory-requests
+  annotations:
+    policies.kyverno.io/title: Require CPU and Memory Requests
+    policies.kyverno.io/category: Best Practices
+    policies.kyverno.io/severity: medium
+    policies.kyverno.io/description: Every application container should declare non-empty CPU and memory requests.
+spec:
+  validationFailureAction: Audit
+  background: true
+  rules:
+    - name: check-container-requests
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+              namespaces:
+                - applications
+      validate:
+        message: Set non-empty CPU and memory requests for every application container and init container.
+        foreach:
+          - list: request.object.spec.containers[]
+            pattern:
+              resources:
+                requests:
+                  cpu: "?*"
+                  memory: "?*"
+          - list: request.object.spec.initContainers[]
+            pattern:
+              resources:
+                requests:
+                  cpu: "?*"
+                  memory: "?*"
+---
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: disallow-latest-image-tag
+  annotations:
+    policies.kyverno.io/title: Disallow the Latest Image Tag
+    policies.kyverno.io/category: Best Practices
+    policies.kyverno.io/severity: medium
+    policies.kyverno.io/description: Mutable latest image tags make deployments less reproducible.
+spec:
+  validationFailureAction: Audit
+  background: true
+  rules:
+    - name: check-container-image-tags
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+              namespaces:
+                - applications
+      validate:
+        message: Use a versioned image tag instead of the latest tag.
+        foreach:
+          - list: request.object.spec.containers[]
+            pattern:
+              image: "!*:latest"
+          - list: request.object.spec.initContainers[]
+            pattern:
+              image: "!*:latest"
+---
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-container-health-probes
+  annotations:
+    policies.kyverno.io/title: Require Container Health Probes
+    policies.kyverno.io/category: Best Practices
+    policies.kyverno.io/severity: low
+    policies.kyverno.io/description: Long-running application containers should define at least one startup, readiness, or liveness probe.
+spec:
+  validationFailureAction: Audit
+  background: true
+  rules:
+    - name: check-container-probes
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+              namespaces:
+                - applications
+      exclude:
+        any:
+          - resources:
+              kinds:
+                - Pod
+              selector:
+                matchExpressions:
+                  - key: batch.kubernetes.io/job-name
+                    operator: Exists
+      validate:
+        message: Define at least one startup, readiness, or liveness probe for each long-running application container.
+        foreach:
+          - list: request.object.spec.containers[]
+            deny:
+              conditions:
+                any:
+                  - key: "{{ (!element.startupProbe && !element.readinessProbe && !element.livenessProbe) }}"
+                    operator: Equals
+                    value: true
+---
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: restrict-application-host-access
+  annotations:
+    policies.kyverno.io/title: Restrict Application Host Access
+    policies.kyverno.io/category: Pod Security
+    policies.kyverno.io/severity: high
+    policies.kyverno.io/description: Application Pods should not use host namespaces or hostPath volumes without an explicit review.
+spec:
+  validationFailureAction: Audit
+  background: true
+  rules:
+    - name: check-host-access
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+              namespaces:
+                - applications
+      validate:
+        message: Host namespaces and hostPath volumes require explicit security review.
+        deny:
+          conditions:
+            any:
+              - key: "{{ request.object.spec.hostNetwork || `false` }}"
+                operator: Equals
+                value: true
+              - key: "{{ request.object.spec.hostPID || `false` }}"
+                operator: Equals
+                value: true
+              - key: "{{ request.object.spec.hostIPC || `false` }}"
+                operator: Equals
+                value: true
+              - key: "{{ request.object.spec.volumes[?hostPath] | length(@) }}"
+                operator: GreaterThan
+                value: 0
