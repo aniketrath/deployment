@@ -5,6 +5,7 @@ metadata:
   namespace: infrastructure
 spec:
   interval: 10m
+  targetNamespace: kubescape
   chart:
     spec:
       chart: kubescape-operator
