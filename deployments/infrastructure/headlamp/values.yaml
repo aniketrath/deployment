@@ -32,6 +32,9 @@ pluginsManager:
       - name: kubescape
         source: https://artifacthub.io/packages/headlamp/kubescape-headlamp-plugin/headlamp_kubescape
         version: 0.11.2
+      - name: kyverno
+        source: https://artifacthub.io/packages/headlamp/headlamp-plugins/headlamp_kyverno
+        version: 0.1.0
       - name: kube-vip
         source: https://artifacthub.io/packages/headlamp/headlamp-kube-vip/headlamp-kube-vip
         version: 1.0.2
@@ -42,6 +45,32 @@ pluginsManager:
       parallel: true
       maxConcurrent: 2
 initContainers:
+  - name: headlamp-prometheus-plugin
+    image: alpine:3.22
+    imagePullPolicy: IfNotPresent
+    command:
+      - /bin/sh
+      - -c
+      - |
+        set -eu
+        wget -O /tmp/prometheus-plugin.tar.gz https://github.com/headlamp-k8s/plugins/releases/download/prometheus-0.9.1/prometheus-0.9.1.tar.gz
+        echo "06afabe42da69e8e0c5c2632acc3fee020566825d2ae71ff8e4f3dd7f78fc4ae  /tmp/prometheus-plugin.tar.gz" | sha256sum -c -
+        tar -xzf /tmp/prometheus-plugin.tar.gz -C /headlamp-plugins-shared
+    securityContext:
+      runAsNonRoot: false
+      privileged: false
+      runAsUser: 0
+      runAsGroup: 0
+    resources:
+      requests:
+        cpu: 10m
+        memory: 16Mi
+      limits:
+        cpu: 100m
+        memory: 64Mi
+    volumeMounts:
+      - name: plugins-dir
+        mountPath: /headlamp-plugins-shared
   - name: headlamp-flux-plugin
     image: ghcr.io/headlamp-k8s/headlamp-plugin-flux:latest
     imagePullPolicy: Always
