@@ -59,6 +59,10 @@ spec:
             - name: http
               containerPort: 2283
               protocol: TCP
+          resources:
+            requests:
+              cpu: 250m
+              memory: 2Gi
           startupProbe:
             tcpSocket:
               port: http

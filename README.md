@@ -173,9 +173,15 @@ All applications are reachable only over Tailscale, never the public internet.
   recovery does not immediately fail reconciliation.
 
 These are health/readiness protections, not a boot-time CPU throttle or a
-strict startup queue. CPU/memory requests and limits should only be tuned after
-checking node allocatable capacity and live usage; local Prometheus history can
-inform later tuning once it has accumulated data.
+strict startup queue. Based on the supplied `kubectl top` snapshot and the
+node's 16 CPU / approximately 15.2 GiB allocatable memory, baseline CPU and
+memory requests are set on the measured Postgres, Redis, Infisical, Vaultwarden,
+and Immich containers. These requests reserve scheduling capacity; they do not
+cap actual consumption. Hard limits are intentionally not set from a single
+snapshot because temporary memory peaks could trigger OOM kills. Review the
+requests against Prometheus history after it has accumulated data, and size
+chart-managed n8n and newly installed operators separately once their usage is
+measured.
 
 ## Local production-network simulation
 
