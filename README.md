@@ -135,11 +135,12 @@ Prometheus plugin; Grafana and Alertmanager are not installed.
 - **Kubescape** — continuous Kubernetes configuration and image-vulnerability
   scanning, surfaced through the Headlamp plugin. Persistent storage requires
   a default StorageClass and at least 5 GiB of available capacity. Node and
-  runtime detections are disabled in the initial configuration (image SBOM
-  generation remains enabled for vulnerability reporting). The node agent is
-  used for image-vulnerability relevancy; its runtime path is set to K3s's
-  bundled `runc` location for this NixOS/K3s host. This installs the operator
-  in Kubernetes, not on the NixOS host.
+  runtime detections and vulnerability relevancy are disabled in the initial
+  configuration. This avoids deploying the node agent, which is incompatible
+  with the host's available K3s runtime path; configuration and image-
+  vulnerability scanning remain enabled, but vulnerability results will not
+  receive node-agent relevancy filtering. This installs the operator in
+  Kubernetes, not on the NixOS host.
 - **Kyverno** — Kubernetes policy engine with its Headlamp plugin for viewing
   policies, reports, and violations. The initial install includes no policy
   resources, so it cannot block workloads; add policies explicitly in audit
