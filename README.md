@@ -136,8 +136,10 @@ Prometheus plugin; Grafana and Alertmanager are not installed.
   scanning, surfaced through the Headlamp plugin. Persistent storage requires
   a default StorageClass and at least 5 GiB of available capacity. Node and
   runtime detections are disabled in the initial configuration (image SBOM
-  generation remains enabled for vulnerability reporting); this installs the
-  operator in Kubernetes, not on the NixOS host.
+  generation remains enabled for vulnerability reporting). The node agent is
+  used for image-vulnerability relevancy; its runtime path is set to K3s's
+  bundled `runc` location for this NixOS/K3s host. This installs the operator
+  in Kubernetes, not on the NixOS host.
 - **Kyverno** — Kubernetes policy engine with its Headlamp plugin for viewing
   policies, reports, and violations. The initial install includes no policy
   resources, so it cannot block workloads; add policies explicitly in audit

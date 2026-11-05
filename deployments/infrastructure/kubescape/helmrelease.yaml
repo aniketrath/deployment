@@ -23,6 +23,8 @@ spec:
       retries: 3
   values:
     clusterName: ${CLUSTER_NAME}
+    global:
+      overrideRuntimePath: /host/var/lib/rancher/k3s/data/current/bin/runc
     certificates:
       strategy: initContainer
     capabilities:
