@@ -16,6 +16,13 @@ GitOps-managed Kubernetes stack for stackcraft. Git is the source of truth;
    be reused across environments with different values injected per cluster
    (e.g. Infisical identity/project IDs, environment name).
 
+Flux `dependsOn` and health checks gate reconciliation; they do not sequence
+the kubelet's restart of workloads that already exist when a node reboots.
+Startup and readiness probes below keep services unready while they initialize,
+and startup probes prevent liveness checks from restarting a slow cold start.
+They do not limit CPU/memory or stagger pod starts, so resource sizing must be
+based on observed node capacity and workload usage.
+
 ### Reconciliation order (staging)
 
 ```text
@@ -152,6 +159,23 @@ Prometheus plugin; Grafana and Alertmanager are not installed.
   Tailscale.
 
 All applications are reachable only over Tailscale, never the public internet.
+
+### Single-node recovery checks
+
+- Postgres uses `pg_isready` for startup, readiness, and liveness. The startup
+  probe allows up to 15 minutes for database recovery before Kubernetes treats
+  startup as failed.
+- Redis uses `redis-cli ping` for the same checks, allowing up to 15 minutes
+  for append-only-file recovery.
+- Infisical uses a TCP startup/readiness/liveness check on its HTTP port;
+  Vaultwarden uses its `/alive` endpoint.
+- Flux's health-check timeout for these components is 15 minutes so slow
+  recovery does not immediately fail reconciliation.
+
+These are health/readiness protections, not a boot-time CPU throttle or a
+strict startup queue. CPU/memory requests and limits should only be tuned after
+checking node allocatable capacity and live usage; local Prometheus history can
+inform later tuning once it has accumulated data.
 
 ## Local production-network simulation
 

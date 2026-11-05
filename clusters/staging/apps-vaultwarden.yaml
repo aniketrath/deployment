@@ -18,7 +18,7 @@ spec:
     name: flux-system
   targetNamespace: applications
   wait: true
-  timeout: 5m
+  timeout: 15m
   postBuild:
     substitute:
       infisical_identity_id: "bb87b166-71c7-4111-af03-d0ef0f83016f"
